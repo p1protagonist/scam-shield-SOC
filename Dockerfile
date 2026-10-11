@@ -1,5 +1,8 @@
 # Multi-runtime Dockerfile for Railway, Render, Fly.io, and Cloud Run
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
+
+# Debian 12 marks system Python as externally managed (PEP 668); allow pip installs into it
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # Install Python and audio C-libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
