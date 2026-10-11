@@ -29,16 +29,23 @@
 
 /* Apple Liquid Floating Tiles */
 .liquid-tile {
-  background: rgba(18, 18, 22, 0.65);
+  background: rgba(18, 18, 22, 0.72);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4), inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
-  border-radius: 1.5rem; /* 24px Apple card radius */
+  border-radius: 1.25rem; /* 20px on mobile for optimal screen real estate */
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  touch-action: manipulation;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
+  .liquid-tile {
+    border-radius: 1.5rem; /* 24px Apple card radius on tablets */
+  }
+}
+
+@media (min-width: 1024px) {
   .liquid-tile {
     border-radius: 1.75rem; /* 28px on larger displays */
   }

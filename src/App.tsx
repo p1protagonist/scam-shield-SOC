@@ -9,6 +9,8 @@ import { CallControls, REAL_SCAM_PRESETS } from './components/CallControls';
 import { DynamicIslandAlert } from './components/DynamicIslandAlert';
 import { ThreatLogsPanel, ThreatLogEntry } from './components/ThreatLogsPanel';
 import { ResourcesModal } from './components/ResourcesModal';
+import { MobileNavBar, MobileTab } from './components/MobileNavBar';
+import { MobileActiveCallBar } from './components/MobileActiveCallBar';
 import { TelemetryPacket, CallerInfo, CallPreset } from './types';
 
 // High-confidence scam trigger keywords & intent rules for live transcription
@@ -43,6 +45,7 @@ const LIVE_SCAM_RULES = [
 export default function App() {
   // Navigation State
   const [activeNavView, setActiveNavView] = useState('dashboard');
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>('monitor');
   const [isThreatLogsOpen, setIsThreatLogsOpen] = useState(false);
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -614,25 +617,46 @@ export default function App() {
           onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
         />
 
-        {/* Scrollable Dashboard Viewport */}
-        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {/* Real Metrics Stat Cards */}
-          <StatCards
-            totalScans={totalScans}
-            criticalCount={criticalCount}
-            suspiciousCount={suspiciousCount}
-            safeCount={safeCount}
-            aiVoiceCount={aiVoiceCount}
+        {/* Mobile Active Call Status Bar */}
+        <div className="pt-2">
+          <MobileActiveCallBar
+            isStreaming={isStreaming}
+            isMicActive={isMicActive}
             threatLevel={threatLevel}
             isAiVoice={isAiVoice}
-            isStreaming={isStreaming}
-            confidenceScore={0.96}
+            activeCaller={activeCaller}
+            activePresetTitle={REAL_SCAM_PRESETS.find((p) => p.id === activePresetId)?.title}
+            onHangup={stopCurrentSession}
+            onToggleMic={stopCurrentSession}
+            audioVolume={audioVolume}
           />
+        </div>
+
+        {/* Scrollable Dashboard Viewport */}
+        <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5 pb-24 lg:pb-6">
+          {/* Real Metrics Stat Cards (Always visible or in overview) */}
+          <div className={activeMobileTab === 'monitor' || activeMobileTab === 'controls' ? 'block' : 'hidden lg:block'}>
+            <StatCards
+              totalScans={totalScans}
+              criticalCount={criticalCount}
+              suspiciousCount={suspiciousCount}
+              safeCount={safeCount}
+              aiVoiceCount={aiVoiceCount}
+              threatLevel={threatLevel}
+              isAiVoice={isAiVoice}
+              isStreaming={isStreaming}
+              confidenceScore={0.96}
+            />
+          </div>
 
           {/* Center Stage: 3D Wireframe Sphere + Live Real-Time Transcript & Audio Controls */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
             {/* Center Left: Animated Glowing 3D Wireframe Sphere */}
-            <div className="lg:col-span-5 flex flex-col">
+            <div
+              className={`lg:col-span-5 flex flex-col ${
+                activeMobileTab === 'monitor' ? 'block' : 'hidden lg:flex'
+              }`}
+            >
               <WireframeSphere
                 audioVolume={audioVolume}
                 frequencyData={frequencyData}
@@ -645,7 +669,14 @@ export default function App() {
 
             {/* Center Right: Real-time Transcript & Controls */}
             <div className="lg:col-span-7 flex flex-col space-y-4">
-              <div className="h-64">
+              {/* Transcript Box */}
+              <div
+                className={`h-64 sm:h-72 ${
+                  activeMobileTab === 'transcript' || activeMobileTab === 'monitor'
+                    ? 'block'
+                    : 'hidden lg:block'
+                }`}
+              >
                 <TranscriptBox
                   liveSpeechTranscript={liveSpeechTranscript}
                   history={telemetryHistory}
@@ -657,23 +688,38 @@ export default function App() {
                 />
               </div>
 
-              <CallControls
-                isStreaming={isStreaming}
-                isMicActive={isMicActive}
-                onStartMic={handleStartMic}
-                onStopMic={stopCurrentSession}
-                onSelectPreset={handleSelectPreset}
-                activePresetId={activePresetId}
-                onLookupNumber={handleLookupNumber}
-                activeCaller={activeCaller}
-                groqApiKey={groqApiKey}
-                setGroqApiKey={setGroqApiKey}
-              />
+              {/* Call Controls & Presets */}
+              <div
+                className={
+                  activeMobileTab === 'controls' || activeMobileTab === 'monitor'
+                    ? 'block'
+                    : 'hidden lg:block'
+                }
+              >
+                <CallControls
+                  isStreaming={isStreaming}
+                  isMicActive={isMicActive}
+                  onStartMic={handleStartMic}
+                  onStopMic={stopCurrentSession}
+                  onSelectPreset={handleSelectPreset}
+                  activePresetId={activePresetId}
+                  onLookupNumber={handleLookupNumber}
+                  activeCaller={activeCaller}
+                  groqApiKey={groqApiKey}
+                  setGroqApiKey={setGroqApiKey}
+                />
+              </div>
             </div>
           </div>
 
           {/* Bottom Half: Investigations Flow Node Tree */}
-          <div>
+          <div
+            className={
+              activeMobileTab === 'investigation' || activeMobileTab === 'monitor'
+                ? 'block'
+                : 'hidden lg:block'
+            }
+          >
             <InvestigationsFlow
               threatLevel={threatLevel}
               isAiVoice={isAiVoice}
@@ -685,6 +731,23 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileNavBar
+        activeTab={activeMobileTab}
+        onChangeTab={(tab) => {
+          setActiveMobileTab(tab);
+          if (tab === 'threatlogs') {
+            setIsThreatLogsOpen(true);
+          } else if (tab === 'resources') {
+            setIsResourcesOpen(true);
+          }
+        }}
+        isStreaming={isStreaming}
+        threatLevel={threatLevel}
+        threatLogsCount={threatLogs.length}
+        onEmergencyHangup={stopCurrentSession}
+      />
 
       {/* 4. Session Threat Logs Panel */}
       <ThreatLogsPanel

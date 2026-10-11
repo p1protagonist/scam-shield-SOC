@@ -40,14 +40,14 @@ export const StatCards: React.FC<StatCardsProps> = ({
   const confidenceDisplay = aggregatePercent.toFixed(1);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 select-none">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5 select-none">
       {/* 1. Aggregate AI Confidence Score */}
-      <div className="liquid-tile p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden group">
+      <div className="col-span-2 sm:col-span-1 liquid-tile p-3.5 sm:p-5 flex flex-col justify-between relative overflow-hidden group">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 font-medium">
             <div className="flex items-center gap-1.5">
               <Gauge className="w-3.5 h-3.5 text-[#FF4500]" />
-              <span className="text-neutral-200 font-semibold">Confidence Score</span>
+              <span className="text-neutral-200 font-semibold text-xs">Confidence</span>
             </div>
             <span className="text-[10px] font-mono text-neutral-400">
               {isStreaming ? (
@@ -112,122 +112,122 @@ export const StatCards: React.FC<StatCardsProps> = ({
       </div>
 
       {/* 2. Audio Slices Analyzed */}
-      <div className="liquid-tile p-4 sm:p-5 flex flex-col justify-between">
+      <div className="liquid-tile p-3 sm:p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 font-medium">
-            <div className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-neutral-400" />
-              <span className="text-neutral-200 font-semibold">Audio Slices Analyzed</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <Activity className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <span className="text-neutral-200 font-semibold text-xs truncate">Audio Slices</span>
             </div>
-            <span className="text-[10px] font-mono text-neutral-500">Session</span>
+            <span className="text-[10px] font-mono text-neutral-500 shrink-0">Live</span>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-white tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl sm:text-4xl font-bold font-mono tracking-tight text-white tabular-nums">
               {totalScans}
             </span>
-            <span className="text-xs text-neutral-400 font-mono">3-sec windows</span>
+            <span className="text-[11px] text-neutral-400 font-mono">slices</span>
           </div>
 
-          <p className="text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
-            {isStreaming ? 'Continuous streaming inspection active' : 'Zero background idling &middot; Real-time pipeline'}
+          <p className="hidden sm:block text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
+            {isStreaming ? 'Continuous streaming inspection active' : 'Zero background idling · Real-time pipeline'}
           </p>
         </div>
 
-        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-neutral-400">
+        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-neutral-400">
           <span>Status</span>
           <span className={isStreaming ? 'text-[#FF4500] font-semibold' : 'text-neutral-500'}>
-            {isStreaming ? 'Active Intercept' : 'Standby'}
+            {isStreaming ? 'Active' : 'Standby'}
           </span>
         </div>
       </div>
 
       {/* 3. AI Cloned Voices */}
-      <div className="liquid-tile p-4 sm:p-5 flex flex-col justify-between">
+      <div className="liquid-tile p-3 sm:p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 font-medium">
-            <div className="flex items-center gap-1.5">
-              <Bot className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-neutral-200 font-semibold">AI Cloned Voices</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <Bot className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="text-neutral-200 font-semibold text-xs truncate">AI Clones</span>
             </div>
-            <span className="text-[10px] font-mono text-purple-400">Vocoder DSP</span>
+            <span className="text-[10px] font-mono text-purple-400 shrink-0">DSP</span>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-purple-300 tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl sm:text-4xl font-bold font-mono tracking-tight text-purple-300 tabular-nums">
               {aiVoiceCount}
             </span>
-            <span className="text-xs text-neutral-400 font-mono">detected</span>
+            <span className="text-[11px] text-neutral-400 font-mono">detected</span>
           </div>
 
-          <p className="text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
+          <p className="hidden sm:block text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
             Neural voice deepfakes identified via pitch micro-jitter analysis
           </p>
         </div>
 
-        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-neutral-400">
-          <span>Pitch Regularity</span>
-          <span className="text-purple-300 font-semibold">{isAiVoice ? '< 0.05 (Flagged)' : 'Nominal'}</span>
+        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-neutral-400">
+          <span>Pitch</span>
+          <span className="text-purple-300 font-semibold">{isAiVoice ? '< 0.05' : 'Nominal'}</span>
         </div>
       </div>
 
       {/* 4. Threat Severity Breakdown */}
-      <div className="liquid-tile p-4 sm:p-5 flex flex-col justify-between">
+      <div className="liquid-tile p-3 sm:p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 font-medium">
-            <div className="flex items-center gap-1.5">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-neutral-200 font-semibold">Threat Breakdown</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="text-neutral-200 font-semibold text-xs truncate">Threats</span>
             </div>
-            <span className="text-[10px] font-mono text-neutral-500">Audited</span>
+            <span className="text-[10px] font-mono text-neutral-500 shrink-0">Audit</span>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-red-400 tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl sm:text-4xl font-bold font-mono tracking-tight text-red-400 tabular-nums">
               {criticalCount}
             </span>
-            <span className="text-xs text-neutral-400 font-mono">critical threats</span>
+            <span className="text-[11px] text-neutral-400 font-mono">critical</span>
           </div>
         </div>
 
-        <div className="space-y-1 pt-2 mt-2 border-t border-white/[0.06] text-[11px] font-mono">
+        <div className="space-y-0.5 pt-2 mt-2 border-t border-white/[0.06] text-[10px] sm:text-[11px] font-mono">
           <div className="flex items-center justify-between text-neutral-300">
             <span className="text-neutral-400">Suspicious:</span>
             <span className="text-orange-400 font-bold">{suspiciousCount}</span>
           </div>
           <div className="flex items-center justify-between text-neutral-400">
-            <span>Verified Safe:</span>
+            <span>Safe:</span>
             <span className="text-emerald-400 font-bold">{safeCount}</span>
           </div>
         </div>
       </div>
 
       {/* 5. Interventions */}
-      <div className="liquid-tile p-4 sm:p-5 flex flex-col justify-between">
+      <div className="liquid-tile p-3 sm:p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 font-medium">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-neutral-200 font-semibold">Interventions</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-neutral-200 font-semibold text-xs truncate">Mitigated</span>
             </div>
-            <span className="text-[10px] font-mono text-neutral-500">Mitigated</span>
+            <span className="text-[10px] font-mono text-neutral-500 shrink-0">Shield</span>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-emerald-400 tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl sm:text-4xl font-bold font-mono tracking-tight text-emerald-400 tabular-nums">
               {criticalCount}
             </span>
-            <span className="text-xs text-neutral-400 font-mono">calls cut</span>
+            <span className="text-[11px] text-neutral-400 font-mono">cut</span>
           </div>
 
-          <p className="text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
+          <p className="hidden sm:block text-[11px] text-neutral-400 mt-2 font-mono leading-relaxed">
             Immediate acoustic siren &amp; DOM disconnect safeguard
           </p>
         </div>
 
-        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-neutral-400">
-          <span>Kill Switch Protocol</span>
-          <span className="text-emerald-400 font-semibold">Armed &amp; Ready</span>
+        <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-neutral-400">
+          <span>Kill Switch</span>
+          <span className="text-emerald-400 font-semibold">Armed</span>
         </div>
       </div>
     </div>

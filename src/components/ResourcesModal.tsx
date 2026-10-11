@@ -140,20 +140,20 @@ export const ResourcesModal: React.FC<ResourcesModalProps> = ({ isOpen, onClose 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#141418] border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fadeIn">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 select-none">
+      <div className="w-full sm:max-w-3xl h-[92vh] sm:h-auto sm:max-h-[90vh] bg-[#141418] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fadeIn">
         {/* Header */}
-        <div className="p-6 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#FF4500]/20 border border-[#FF4500]/30 flex items-center justify-center text-[#FF4500]">
-              <BookOpen className="w-5 h-5" />
+        <div className="p-4 sm:p-6 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#FF4500]/20 border border-[#FF4500]/30 flex items-center justify-center text-[#FF4500] shrink-0">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-wide">
-                Scam Defense Knowledge Base & Threat Directory
+              <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                Scam Defense Knowledge Base
               </h2>
-              <p className="text-xs text-neutral-400 font-mono">
-                Verified cybersecurity guidelines & telephone fraud countermeasures
+              <p className="text-[10px] sm:text-xs text-neutral-400 font-mono">
+                Verified cybersecurity guidelines & fraud countermeasures
               </p>
             </div>
           </div>
@@ -167,46 +167,46 @@ export const ResourcesModal: React.FC<ResourcesModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Category Tabs */}
-        <div className="px-6 py-3 border-b border-white/[0.06] flex items-center gap-2 bg-black/20 overflow-x-auto text-xs font-medium">
+        <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-white/[0.06] flex items-center gap-1.5 sm:gap-2 bg-black/20 overflow-x-auto text-[11px] sm:text-xs font-medium no-scrollbar">
           <button
             onClick={() => setActiveCategory('types')}
-            className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
               activeCategory === 'types'
                 ? 'bg-white text-black font-semibold shadow-md'
                 : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
             }`}
           >
-            Common Scam Call Types
+            Scam Types
           </button>
           <button
             onClick={() => setActiveCategory('redflags')}
-            className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
               activeCategory === 'redflags'
                 ? 'bg-white text-black font-semibold shadow-md'
                 : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
             }`}
           >
-            Universal Red Flags
+            Red Flags
           </button>
           <button
             onClick={() => setActiveCategory('bestpractices')}
-            className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
               activeCategory === 'bestpractices'
                 ? 'bg-white text-black font-semibold shadow-md'
                 : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
             }`}
           >
-            Defense Best Practices
+            Best Practices
           </button>
           <button
             onClick={() => setActiveCategory('orgs')}
-            className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
               activeCategory === 'orgs'
                 ? 'bg-white text-black font-semibold shadow-md'
                 : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
             }`}
           >
-            Reputable Cybersecurity Orgs
+            Agencies &amp; Orgs
           </button>
         </div>
 

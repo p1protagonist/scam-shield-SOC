@@ -89,7 +89,7 @@ export const ThreatLogsPanel: React.FC<ThreatLogsPanelProps> = ({
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-[#141418] border-l border-white/10 shadow-2xl flex flex-col backdrop-blur-xl animate-fadeIn select-none">
+    <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-lg bg-[#141418] border-l border-white/10 shadow-2xl flex flex-col backdrop-blur-xl animate-fadeIn select-none">
       {/* Panel Header */}
       <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
         <div className="flex items-center gap-2.5">
