@@ -1,0 +1,6 @@
+{
+  "summary":  "Updated architecture diagram and data strategy reflecting strict separation of client-side 3D Web Audio visualization and server-side Python FastAPI librosa acoustics, plus persistent threat logs and security resources.",
+  "updatedAt":  "2026-10-11T15:58:29.296298761Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

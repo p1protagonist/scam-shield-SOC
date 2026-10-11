@@ -1,0 +1,8 @@
+{
+  "name": "ScamShield SOC - AI Call Analyzer",
+  "description": "Real-time AI scam call analyzer with acoustic forensics, caller lookup, 3D wireframe threat visualizer, and emergency kill switch.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
