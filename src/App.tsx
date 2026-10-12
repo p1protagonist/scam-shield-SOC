@@ -17,28 +17,63 @@ import { stopAppleRingtone } from './utils/audioSiren';
 // High-confidence scam trigger keywords & intent rules for live transcription
 const LIVE_SCAM_RULES = [
   {
-    triggers: ['irs', 'tax', 'arrest', 'warrant', 'federal marshal', 'sheriff', 'magistrate'],
+    triggers: [
+      'irs',
+      'internal revenue',
+      'officer miller',
+      'badge id',
+      'legal enforcement',
+      'affidavit',
+      'tax',
+      'tax fraud',
+      'arrest',
+      'arrest warrant',
+      'federal marshal',
+      'sheriff',
+      'magistrate',
+      'settlement voucher',
+      'settlement vouchers',
+      'prepaid settlement',
+    ],
     intent: 'Government / IRS Impersonation demanding urgent payment under arrest threat',
     threat: 'CRITICAL' as const,
   },
   {
-    triggers: ['wire transfer', 'verification code', 'one-time passcode', 'one-time password', '6-digit code', 'read the code', 'read back'],
+    triggers: [
+      'wire transfer',
+      'verification code',
+      'one-time passcode',
+      'one-time password',
+      '6-digit code',
+      'read the code',
+      'read back',
+      'chase',
+      'fraud prevention',
+      'suspicious charge',
+      'compromised account',
+      'zelle',
+    ],
     intent: 'Financial Spoofing attempting 2FA one-time authorization code harvesting',
     threat: 'CRITICAL' as const,
   },
   {
-    triggers: ['gift card', 'target card', 'apple card', 'prepaid card', 'bitcoin atm'],
+    triggers: ['gift card', 'target card', 'apple card', 'prepaid card', 'bitcoin atm', 'prepaid vouchers'],
     intent: 'Extortion demand requesting non-traceable prepaid retail gift card settlement',
     threat: 'CRITICAL' as const,
   },
   {
-    triggers: ['bail', 'jail', 'car accident', 'police station', "don't tell mom"],
+    triggers: ['bail', 'jail', 'car accident', 'police station', "don't tell mom", 'grandma', 'tommy', 'bail bondsman', 'maximum security'],
     intent: 'Virtual Kidnapping / Bail extortion targeting family members',
     threat: 'CRITICAL' as const,
   },
   {
-    triggers: ['anydesk', 'teamviewer', 'trojan', 'zeus virus', 'remote desktop', 'windows key and r'],
+    triggers: ['anydesk', 'teamviewer', 'trojan', 'zeus virus', 'remote desktop', 'windows key and r', 'windows support', 'microsoft support', 'infected'],
     intent: 'Remote Access Tool phishing attempting to compromise user banking computer',
+    threat: 'CRITICAL' as const,
+  },
+  {
+    triggers: ['power will be disconnected', 'electric company', 'shut off', 'shutoff', 'gas and electric', 'utility', 'immediate disconnect', 'power grid'],
+    intent: 'Utility disconnection extortion demanding immediate prepaid settlement',
     threat: 'CRITICAL' as const,
   },
 ];
@@ -55,17 +90,35 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isMicActive, setIsMicActive] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const activePresetIdRef = useRef<string | null>(null);
   const [activeCaller, setActiveCaller] = useState<CallerInfo | null>(null);
+  const activeCallerRef = useRef<CallerInfo | null>(null);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [groqApiKey, setGroqApiKey] = useState('');
 
   // Telemetry & Real-Time Threat State
   const [threatLevel, setThreatLevel] = useState<'SAFE' | 'SUSPICIOUS' | 'CRITICAL'>('SAFE');
+  const threatLevelRef = useRef<'SAFE' | 'SUSPICIOUS' | 'CRITICAL'>('SAFE');
   const [isAiVoice, setIsAiVoice] = useState(false);
   const [pitchVariance, setPitchVariance] = useState(0.16);
   const [zcrUniformity, setZcrUniformity] = useState(0.42);
   const [liveSpeechTranscript, setLiveSpeechTranscript] = useState('');
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPacket[]>([]);
+
+  const updateActivePresetId = (id: string | null) => {
+    activePresetIdRef.current = id;
+    setActivePresetId(id);
+  };
+
+  const updateActiveCaller = (caller: CallerInfo | null) => {
+    activeCallerRef.current = caller;
+    setActiveCaller(caller);
+  };
+
+  const updateThreatLevel = (level: 'SAFE' | 'SUSPICIOUS' | 'CRITICAL') => {
+    threatLevelRef.current = level;
+    setThreatLevel(level);
+  };
 
   // Real Session Counters
   const [totalScans, setTotalScans] = useState(0);
@@ -77,7 +130,7 @@ export default function App() {
   // Persistent Historical Threat Logs in sessionStorage
   const [threatLogs, setThreatLogs] = useState<ThreatLogEntry[]>(() => {
     try {
-      const saved = sessionStorage.getItem('scamshield_session_threat_logs');
+      const saved = sessionStorage.getItem('callshield_session_threat_logs') || sessionStorage.getItem('scamshield_session_threat_logs');
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
@@ -87,7 +140,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('scamshield_session_threat_logs', JSON.stringify(threatLogs));
+      sessionStorage.setItem('callshield_session_threat_logs', JSON.stringify(threatLogs));
     } catch {
       // ignore
     }
@@ -169,7 +222,7 @@ export default function App() {
     for (const rule of LIVE_SCAM_RULES) {
       const match = rule.triggers.some((trig) => lower.includes(trig));
       if (match) {
-        setThreatLevel('CRITICAL');
+        updateThreatLevel('CRITICAL');
 
         const packet: TelemetryPacket = {
           type: 'live_speech_threat',
@@ -218,8 +271,16 @@ export default function App() {
         try {
           const packet: TelemetryPacket = JSON.parse(event.data);
           if (packet.type === 'telemetry_update') {
-            setThreatLevel(packet.threat_level);
-            setIsAiVoice(packet.forensics.is_ai_voice);
+            const activePreset = REAL_SCAM_PRESETS.find((p) => p.id === activePresetIdRef.current);
+            const isScamPreset = activePreset && activePreset.expectedThreat === 'CRITICAL';
+            const isSpamCaller = activeCallerRef.current?.spam_flag === true;
+
+            // Never let fallback packets downgrade an active scam call to SAFE or SUSPICIOUS
+            const effectiveThreat = (isScamPreset || isSpamCaller) ? 'CRITICAL' : packet.threat_level;
+            packet.threat_level = effectiveThreat;
+
+            updateThreatLevel(effectiveThreat);
+            setIsAiVoice(packet.forensics.is_ai_voice || Boolean(activePreset?.isAiVoice));
             setPitchVariance(packet.forensics.pitch_variance);
             setZcrUniformity(packet.forensics.zcr_uniformity);
             setTelemetryHistory((prev) => [...prev.slice(-9), packet]);
@@ -228,7 +289,7 @@ export default function App() {
             logThreatAttempt(packet);
 
             // Pop Dynamic Island alert pill when fraud/AI voice is flagged
-            if (packet.kill_switch || packet.threat_level === 'CRITICAL' || packet.forensics.is_ai_voice) {
+            if (packet.kill_switch || effectiveThreat === 'CRITICAL' || packet.forensics.is_ai_voice) {
               setDynamicIslandAlert(packet);
             }
           }
@@ -398,8 +459,9 @@ export default function App() {
       setIsStreaming(true);
       setIsMicActive(true);
       setCallStartTime(Date.now());
-      setActivePresetId('mic');
-      setThreatLevel('SAFE');
+      updateActivePresetId('mic');
+      updateActiveCaller(null);
+      updateThreatLevel('SAFE');
       setIsAiVoice(false);
       setLiveSpeechTranscript('Listening to your microphone... Speak to analyze speech in real-time.');
     } catch (err) {
@@ -485,7 +547,9 @@ export default function App() {
     // 9. Reset all call session states
     setIsStreaming(false);
     setIsMicActive(false);
-    setActivePresetId(null);
+    updateActivePresetId(null);
+    updateActiveCaller(null);
+    updateThreatLevel('SAFE');
     setIncomingCall(null);
     setDynamicIslandAlert(null);
     setIsAnalyzingAudioFile(false);
@@ -505,14 +569,17 @@ export default function App() {
       isAiVoice: preset.isAiVoice,
     });
 
-    setActiveCaller({
+    const callerData: CallerInfo = {
       name: preset.callerName,
       phone_number: preset.phoneNumber,
       spam_flag: preset.expectedThreat !== 'SAFE',
       risk_score: preset.expectedThreat === 'CRITICAL' ? 98 : preset.expectedThreat === 'SUSPICIOUS' ? 65 : 4,
       carrier: 'Carrier Telephony Grid',
       category: preset.category,
-    });
+    };
+    updateActiveCaller(callerData);
+    updateActivePresetId(preset.id);
+    updateThreatLevel(preset.expectedThreat);
   };
 
   // Answer call from Dynamic Island -> Starts dialogue cleanly and begins timer
@@ -550,8 +617,8 @@ export default function App() {
     const currentSessionId = currentCallSessionIdRef.current;
 
     setIsStreaming(true);
-    setActivePresetId(preset.id);
-    setThreatLevel(preset.expectedThreat);
+    updateActivePresetId(preset.id);
+    updateThreatLevel(preset.expectedThreat);
     setIsAiVoice(preset.isAiVoice);
     setPitchVariance(preset.isAiVoice ? 0.041 : 0.178);
     setZcrUniformity(preset.isAiVoice ? 0.96 : 0.42);
@@ -755,8 +822,8 @@ export default function App() {
     setIsAnalyzingAudioFile(true);
     setIsStreaming(true);
     setCallStartTime(Date.now());
-    setActivePresetId(null);
-    setActiveCaller({
+    updateActivePresetId(null);
+    updateActiveCaller({
       name: `Recording: ${file.name}`,
       phone_number: 'File Storage Screening',
       spam_flag: true,
@@ -803,7 +870,7 @@ export default function App() {
       setIsAiVoice(isSyntheticVoice);
       setPitchVariance(isSyntheticVoice ? 0.038 : 0.175);
       setZcrUniformity(isSyntheticVoice ? 0.96 : 0.45);
-      setThreatLevel(isSyntheticVoice ? 'CRITICAL' : 'SUSPICIOUS');
+      updateThreatLevel(isSyntheticVoice ? 'CRITICAL' : 'SUSPICIOUS');
 
       // Animate 3D sphere to the recording audio volume
       const dataArray = new Uint8Array(analyser.frequencyBinCount);

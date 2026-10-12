@@ -66,8 +66,15 @@ function computeFallbackTelemetry(data) {
   const phone = data.phone_number || "+18002758777";
   const isAi = Boolean(data.force_ai_voice);
   const lower = transcript.toLowerCase();
-  const isScam = lower.includes("arrest") || lower.includes("warrant") || lower.includes("gift card") || lower.includes("wire transfer") || lower.includes("bail") || lower.includes("jail") || lower.includes("anydesk") || lower.includes("teamviewer") || isAi && (lower.includes("money") || lower.includes("urgent") || lower.includes("help"));
-  const threatLevel = isScam ? "CRITICAL" : lower.includes("routine") || lower.includes("check-up") ? "SAFE" : "SUSPICIOUS";
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  const isKnownScamNumber = cleaned === "+18002758777" || // IRS
+  cleaned === "+18885550199" || // Chase Fraud
+  cleaned === "+12125550143" || // AI Grandchild
+  cleaned === "+18005553456" || // Tech Support
+  cleaned === "+18005558900";
+  const isScam = isKnownScamNumber || lower.includes("arrest") || lower.includes("warrant") || lower.includes("irs") || lower.includes("internal revenue") || lower.includes("officer miller") || lower.includes("badge id") || lower.includes("affidavit") || lower.includes("tax fraud") || lower.includes("settlement voucher") || lower.includes("gift card") || lower.includes("wire transfer") || lower.includes("one-time passcode") || lower.includes("verification code") || lower.includes("6-digit code") || lower.includes("bail") || lower.includes("jail") || lower.includes("car accident") || lower.includes("anydesk") || lower.includes("teamviewer") || lower.includes("power will be disconnected") || lower.includes("shut off") || lower.includes("shutoff") || isAi && (lower.includes("money") || lower.includes("urgent") || lower.includes("help"));
+  const isSafe = !isScam && (cleaned === "+14155552671" || lower.includes("routine") || lower.includes("check-up") || lower.includes("doctor") || lower.includes("clinic"));
+  const threatLevel = isScam ? "CRITICAL" : isSafe ? "SAFE" : "SUSPICIOUS";
   return {
     type: "telemetry_update",
     chunk_id: data.chunk_id || 1,
@@ -81,14 +88,14 @@ function computeFallbackTelemetry(data) {
       confidence: isAi ? 0.98 : 0.92
     },
     caller_info: {
-      name: phone === "+14155552671" ? "Westside Medical Clinic" : isScam ? "Flagged Spoofed Caller" : "Inbound Telephony Entity",
+      name: cleaned === "+14155552671" ? "Westside Family Medicine" : cleaned === "+18002758777" ? "IRS Legal Enforcement (Spoofed)" : cleaned === "+18885550199" ? "Chase Fraud Prevention (Fake)" : cleaned === "+12125550143" ? "Private Number (AI Voice Clone)" : cleaned === "+18005553456" ? "Windows Security Center (Fake)" : cleaned === "+18005558900" ? "Metropolitan Power & Gas (Spoofed)" : isScam ? "Flagged Spoofed Caller" : "Inbound Telephony Entity",
       phone_number: phone,
       spam_flag: isScam,
-      risk_score: isScam ? 97 : 4,
+      risk_score: isScam ? 97 : isSafe ? 4 : 55,
       carrier: "VoIP Telecom"
     },
     threat_level: threatLevel,
-    intent: isScam ? "Urgent coercive scam demand & extortion attempt" : threatLevel === "SAFE" ? "Verified safe communication" : "Suspicious telephony activity",
+    intent: isScam ? "Urgent coercive scam demand & extortion attempt" : threatLevel === "SAFE" ? "Verified safe healthcare communication" : "Suspicious telephony activity",
     kill_switch: isScam
   };
 }

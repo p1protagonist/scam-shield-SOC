@@ -6,6 +6,7 @@ import {
   X,
   Radio,
 } from 'lucide-react';
+import { CallShieldLogo } from './CallShieldLogo';
 
 interface SidebarProps {
   activeView: string;
@@ -38,12 +39,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="flex items-center justify-between pb-5 pt-1 px-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF3B30] to-orange-500 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-[#FF3B30]/25">
-              S
-            </div>
+            <CallShieldLogo className="w-8 h-8" iconClassName="w-4 h-4" />
             <div>
               <h1 className="text-sm font-semibold tracking-tight text-white font-sans">
-                ScamShield
+                Call Shield
               </h1>
               <span className="text-[10px] text-neutral-400 font-mono tracking-wide">
                 CALL PROTECTION

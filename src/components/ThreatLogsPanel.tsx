@@ -65,7 +65,7 @@ export const ThreatLogsPanel: React.FC<ThreatLogsPanelProps> = ({
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(logs, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `scamshield_threat_logs_${Date.now()}.json`);
+    downloadAnchor.setAttribute('download', `callshield_threat_logs_${Date.now()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -83,7 +83,7 @@ export const ThreatLogsPanel: React.FC<ThreatLogsPanelProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `scamshield_threat_logs_${Date.now()}.csv`;
+    a.download = `callshield_threat_logs_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

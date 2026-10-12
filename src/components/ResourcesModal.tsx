@@ -299,7 +299,7 @@ export const ResourcesModal: React.FC<ResourcesModalProps> = ({ isOpen, onClose 
 
         {/* Footer */}
         <div className="p-4 border-t border-white/[0.08] bg-black/50 flex items-center justify-between text-xs text-neutral-400 font-mono">
-          <span>ScamShield SOC Education Engine</span>
+          <span>Call Shield SOC Education Engine</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-sans text-xs transition-colors"

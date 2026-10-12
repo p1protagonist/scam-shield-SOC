@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, ShieldAlert, History, BookOpen, Menu, PhoneOff } from 'lucide-react';
+import { CallShieldLogo } from './CallShieldLogo';
 
 interface TopNavProps {
   onTriggerKillSwitch: () => void;
@@ -33,12 +34,10 @@ export const TopNav: React.FC<TopNavProps> = ({
         </button>
 
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-[#FF3B30] to-orange-500 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-[#FF3B30]/20">
-            S
-          </div>
+          <CallShieldLogo className="w-7 h-7 sm:w-8 sm:h-8" iconClassName="w-4 h-4" />
           <div>
             <span className="text-sm font-semibold tracking-tight text-white font-sans">
-              ScamShield
+              Call Shield
             </span>
             <span className="hidden sm:inline-block text-[10px] text-neutral-400 ml-2 font-mono">
               AI Call Security
