@@ -712,23 +712,30 @@ export default function App() {
             </div>
           </div>
 
-          {/* Bottom Half: Investigations Flow Node Tree */}
-          <div
-            className={
-              activeMobileTab === 'investigation' || activeMobileTab === 'monitor'
-                ? 'block'
-                : 'hidden lg:block'
-            }
-          >
-            <InvestigationsFlow
-              threatLevel={threatLevel}
-              isAiVoice={isAiVoice}
-              pitchVariance={pitchVariance}
-              zcrUniformity={zcrUniformity}
-              isStreaming={isStreaming}
-              activeChunkCount={totalScans}
-            />
-          </div>
+          {/* Optional Collapsible Security Forensics Pipeline (Tucked away for clean minimalist Apple UI) */}
+          <details className="liquid-tile p-4 text-xs group cursor-pointer transition-all">
+            <summary className="font-semibold text-neutral-400 group-hover:text-white transition-colors flex items-center justify-between list-none">
+              <span className="flex items-center gap-2">
+                <span>Advanced Security Forensics & Acoustic Pipeline</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-400 font-mono">
+                  Optional Analysis
+                </span>
+              </span>
+              <span className="text-[11px] font-mono text-neutral-400 group-open:rotate-180 transition-transform">
+                ▼
+              </span>
+            </summary>
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <InvestigationsFlow
+                threatLevel={threatLevel}
+                isAiVoice={isAiVoice}
+                pitchVariance={pitchVariance}
+                zcrUniformity={zcrUniformity}
+                isStreaming={isStreaming}
+                activeChunkCount={totalScans}
+              />
+            </div>
+          </details>
         </main>
       </div>
 

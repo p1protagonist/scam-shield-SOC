@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, BookOpen, History, Menu } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, History, BookOpen, Menu, PhoneOff } from 'lucide-react';
 
 interface TopNavProps {
   onTriggerKillSwitch: () => void;
@@ -21,80 +21,90 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenMobileMenu,
 }) => {
   return (
-    <header className="h-16 px-4 sm:px-6 border-b border-white/[0.08] bg-[#0E0E12]/80 backdrop-blur-2xl flex items-center justify-between gap-3 shrink-0 select-none">
-      {/* Brand title with Apple design cleanliness & mobile toggle */}
-      <div className="flex items-center gap-2.5">
-        {/* Mobile menu trigger */}
+    <header className="h-14 sm:h-16 px-4 sm:px-6 border-b border-white/[0.08] bg-[#000000]/80 backdrop-blur-2xl flex items-center justify-between gap-3 shrink-0 select-none">
+      {/* Brand & Mobile trigger */}
+      <div className="flex items-center gap-3">
         <button
           onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300 active:scale-95 transition-all"
+          className="lg:hidden p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300 active:scale-95 transition-all"
           title="Open menu"
         >
           <Menu className="w-4 h-4" />
         </button>
 
-        <div className="w-7 h-7 rounded-2xl bg-gradient-to-tr from-[#FF4500] to-amber-500 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-[#FF4500]/20 shrink-0">
-          S
-        </div>
-        <div>
-          <span className="text-sm font-bold tracking-tight text-white flex items-center gap-1 font-sans">
-            ScamShield <span className="text-[#FF4500]">SOC</span>
-          </span>
-          <span className="hidden md:inline-block text-[10px] text-neutral-400 font-mono ml-2 uppercase tracking-wider">
-            Real-Time Call Analyzer
-          </span>
-        </div>
-
-        {/* Real Live Status Badge */}
-        <div className="hidden xl:flex items-center gap-1.5 ml-3 px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs">
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isStreaming
-                ? threatLevel === 'CRITICAL'
-                  ? 'bg-red-500 animate-ping'
-                  : 'bg-[#FF4500] animate-pulse'
-                : 'bg-emerald-500'
-            }`}
-          />
-          <span className="text-[11px] font-mono text-neutral-300">
-            {isStreaming ? (threatLevel === 'CRITICAL' ? 'SCAM DETECTED' : 'STREAM INTERCEPT ACTIVE') : 'SYSTEM ARMED & READY'}
-          </span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-[#FF3B30] to-orange-500 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-[#FF3B30]/20">
+            S
+          </div>
+          <div>
+            <span className="text-sm font-semibold tracking-tight text-white font-sans">
+              ScamShield
+            </span>
+            <span className="hidden sm:inline-block text-[10px] text-neutral-400 ml-2 font-mono">
+              AI Call Security
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Right Controls: Responsive pills */}
+      {/* Center Apple-grade Protection Status Pill */}
+      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs">
+        <span
+          className={`w-2 h-2 rounded-full ${
+            isStreaming
+              ? threatLevel === 'CRITICAL'
+                ? 'bg-red-500 animate-ping'
+                : 'bg-[#FF3B30] animate-pulse'
+              : 'bg-emerald-500'
+          }`}
+        />
+        <span className="text-[11px] text-neutral-200 font-medium">
+          {isStreaming
+            ? threatLevel === 'CRITICAL'
+              ? 'Threat Detected'
+              : 'Screening Call...'
+            : 'Protection Active'}
+        </span>
+      </div>
+
+      {/* Right Actions: Threat Logs, Guide, and Emergency Action */}
       <div className="flex items-center gap-1.5 sm:gap-2">
-        {/* Threat Logs Button */}
+        {/* Threat Audit Log */}
         <button
           onClick={onOpenThreatLogs}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-neutral-200 hover:text-white border border-white/10 text-xs font-mono transition-all duration-150 active:scale-95"
+          className="relative p-2 sm:px-3 sm:py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-neutral-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+          title="View Threat History"
         >
-          <History className="w-3.5 h-3.5 text-neutral-400" />
-          <span className="hidden sm:inline">Threat Logs</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-[#FF4500]/25 text-[#FF4500] text-[10px] font-bold">
-            {threatLogsCount}
-          </span>
+          <History className="w-3.5 h-3.5 text-neutral-300" />
+          <span className="hidden md:inline">History</span>
+          {threatLogsCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-[#FF3B30] text-white text-[9px] font-bold">
+              {threatLogsCount}
+            </span>
+          )}
         </button>
 
-        {/* Resources & Learn More Button */}
+        {/* Resources / Safety Guide */}
         <button
           onClick={onOpenResources}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-neutral-200 hover:text-white border border-white/10 text-xs transition-all duration-150 active:scale-95"
+          className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-neutral-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+          title="Scam Safety Guide"
         >
-          <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden sm:inline">Learn More</span>
+          <BookOpen className="w-3.5 h-3.5 text-neutral-300" />
+          <span className="hidden md:inline">Safety Guide</span>
         </button>
 
-        {/* Emergency Manual Kill Switch Trigger Button */}
-        <button
-          onClick={onTriggerKillSwitch}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-600/25 hover:bg-red-600/40 text-red-300 hover:text-red-200 border border-red-500/40 text-xs font-mono font-semibold transition-all duration-150 active:scale-95 shadow-sm shadow-red-500/20"
-          title="Manually trigger emergency call termination"
-        >
-          <ShieldAlert className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-          <span className="hidden sm:inline">ARM KILL SWITCH</span>
-          <span className="sm:hidden text-[10px]">KILL</span>
-        </button>
+        {/* Emergency Cut Call Button (only shown when streaming or urgent) */}
+        {isStreaming ? (
+          <button
+            onClick={onTriggerKillSwitch}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF3B30] hover:bg-[#e03126] text-white text-xs font-bold transition-all shadow-md shadow-[#FF3B30]/30 active:scale-95"
+            title="Emergency Disconnect"
+          >
+            <PhoneOff className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Cut Call</span>
+          </button>
+        ) : null}
       </div>
     </header>
   );

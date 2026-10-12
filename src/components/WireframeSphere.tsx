@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 interface WireframeSphereProps {
@@ -12,20 +12,14 @@ interface WireframeSphereProps {
 
 export const WireframeSphere: React.FC<WireframeSphereProps> = ({
   audioVolume,
-  frequencyData,
   pitchVariance = 0.15,
   isStreaming,
   threatLevel,
   isAiVoice,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'Default' | 'Advanced'>('Default');
 
-  const sphereRef = useRef<THREE.Mesh | null>(null);
-  const innerSphereRef = useRef<THREE.LineSegments | null>(null);
-  const pointsRef = useRef<THREE.Points | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-
   const volumeRef = useRef(audioVolume);
   const pitchVarRef = useRef(pitchVariance);
   const threatLevelRef = useRef(threatLevel);
@@ -43,7 +37,7 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     if (!container) return;
 
     const width = container.clientWidth || 320;
-    const height = container.clientHeight || 280;
+    const height = container.clientHeight || 260;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
@@ -61,7 +55,7 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     const wireframeGeom = new THREE.WireframeGeometry(geometry);
 
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0xff5500,
+      color: 0xff3b30,
       transparent: true,
       opacity: 0.85,
       blending: THREE.AdditiveBlending,
@@ -69,91 +63,89 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
 
     const wireframeMesh = new THREE.LineSegments(wireframeGeom, lineMaterial);
     scene.add(wireframeMesh);
-    innerSphereRef.current = wireframeMesh;
 
-    // Node Vertex Cloud
-    const pointsGeom = new THREE.BufferGeometry();
-    pointsGeom.setAttribute('position', geometry.attributes.position);
-
-    const pointsMaterial = new THREE.PointsMaterial({
-      color: 0xffaa33,
-      size: 0.045,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-    });
-    const pointsMesh = new THREE.Points(pointsGeom, pointsMaterial);
-    scene.add(pointsMesh);
-    pointsRef.current = pointsMesh;
-
-    // Inner Resonating Core
-    const coreGeom = new THREE.SphereGeometry(1.35, 24, 24);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xff4500,
+    // Inner Glowing Core Sphere
+    const innerGeom = new THREE.SphereGeometry(1.1, 24, 24);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x22c55e,
       wireframe: true,
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
     });
-    const coreMesh = new THREE.Mesh(coreGeom, coreMat);
-    scene.add(coreMesh);
-    sphereRef.current = coreMesh;
+    const innerSphere = new THREE.Mesh(innerGeom, innerMat);
+    scene.add(innerSphere);
 
-    let animationFrameId: number;
+    // Subtle particles
+    const particleCount = 70;
+    const particleGeom = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 2.0 + Math.random() * 0.4;
+      positions[i] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i + 2] = r * Math.cos(phi);
+    }
+    particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const particleMat = new THREE.PointsMaterial({
+      size: 0.04,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+    });
+    const particles = new THREE.Points(particleGeom, particleMat);
+    scene.add(particles);
+
+    let animId: number;
     let clock = new THREE.Clock();
 
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+      animId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
+
       const currentVol = volumeRef.current || 0;
-      const currentPitchVar = pitchVarRef.current || 0.15;
-      const currentAiVoice = isAiVoiceRef.current;
       const currentThreat = threatLevelRef.current;
+      const currentIsAi = isAiVoiceRef.current;
 
-      const pitchRateMultiplier = currentAiVoice || currentPitchVar < 0.08 ? 2.4 : 1.0;
-      const rotationSpeed = (0.3 + currentVol * 1.8) * pitchRateMultiplier;
-
-      if (innerSphereRef.current) {
-        innerSphereRef.current.rotation.y += delta * rotationSpeed;
-        innerSphereRef.current.rotation.x += delta * (rotationSpeed * 0.4);
-      }
-      if (pointsRef.current) {
-        pointsRef.current.rotation.y += delta * rotationSpeed;
-        pointsRef.current.rotation.x += delta * (rotationSpeed * 0.4);
-      }
-      if (sphereRef.current) {
-        sphereRef.current.rotation.y -= delta * (rotationSpeed * 0.5);
-      }
-
-      const pulseAmplitude = currentVol * 0.75 + (currentAiVoice ? 0.1 : 0);
-      const pulseFactor = 1.0 + pulseAmplitude;
-
-      if (innerSphereRef.current) {
-        innerSphereRef.current.scale.set(pulseFactor, pulseFactor, pulseFactor);
-      }
-      if (pointsRef.current) {
-        pointsRef.current.scale.set(pulseFactor, pulseFactor, pulseFactor);
-      }
-      if (sphereRef.current) {
-        const coreScale = 0.9 + pulseAmplitude * 0.6;
-        sphereRef.current.scale.set(coreScale, coreScale, coreScale);
+      // Color scheme based on state
+      if (currentThreat === 'CRITICAL') {
+        lineMaterial.color.setHex(0xff3b30); // Apple Red
+        innerMat.color.setHex(0xff3b30);
+        particleMat.color.setHex(0xff453a);
+      } else if (currentIsAi) {
+        lineMaterial.color.setHex(0xbf5af2); // Apple Purple
+        innerMat.color.setHex(0xbf5af2);
+        particleMat.color.setHex(0xda8fff);
+      } else if (currentThreat === 'SUSPICIOUS') {
+        lineMaterial.color.setHex(0xff9f0a); // Apple Amber
+        innerMat.color.setHex(0xff9f0a);
+        particleMat.color.setHex(0xffd60a);
+      } else {
+        lineMaterial.color.setHex(0x30d158); // Apple Green
+        innerMat.color.setHex(0x30d158);
+        particleMat.color.setHex(0x86efac);
       }
 
-      if (innerSphereRef.current) {
-        const mat = innerSphereRef.current.material as THREE.LineBasicMaterial;
-        if (currentThreat === 'CRITICAL') {
-          mat.color.setHex(0xff1100);
-          mat.opacity = 0.95;
-        } else if (currentAiVoice || currentPitchVar < 0.08) {
-          mat.color.setHex(0xff3300);
-          mat.opacity = 0.85 + currentVol * 0.15;
-        } else if (currentThreat === 'SUSPICIOUS') {
-          mat.color.setHex(0xff6600);
-          mat.opacity = 0.75;
-        } else {
-          mat.color.setHex(0xff8800);
-          mat.opacity = 0.65 + currentVol * 0.3;
-        }
-      }
+      // Smooth organic rotation
+      const rotSpeed = 0.35 + currentVol * 1.5;
+      wireframeMesh.rotation.x += delta * rotSpeed * 0.6;
+      wireframeMesh.rotation.y += delta * rotSpeed;
+      innerSphere.rotation.x -= delta * rotSpeed * 0.5;
+      innerSphere.rotation.y += delta * rotSpeed * 0.7;
+      particles.rotation.y -= delta * 0.15;
+
+      // Voice reactive breathing
+      const pulse = 1.0 + Math.sin(elapsed * 2.0) * 0.04 + currentVol * 0.45;
+      wireframeMesh.scale.set(pulse, pulse, pulse);
+      innerSphere.scale.set(pulse * 0.9, pulse * 0.9, pulse * 0.9);
 
       renderer.render(scene, camera);
     };
@@ -161,120 +153,102 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     animate();
 
     const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth || 320;
-      const h = container.clientHeight || 280;
-      camera.aspect = w / h;
+      if (!container || !rendererRef.current) return;
+      const newWidth = container.clientWidth;
+      const newHeight = container.clientHeight;
+      camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      rendererRef.current.setSize(newWidth, newHeight);
     };
 
     window.addEventListener('resize', handleResize);
 
     return () => {
+      cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
       geometry.dispose();
       wireframeGeom.dispose();
       lineMaterial.dispose();
-      pointsGeom.dispose();
-      pointsMaterial.dispose();
-      coreGeom.dispose();
-      coreMat.dispose();
+      innerGeom.dispose();
+      innerMat.dispose();
+      particleGeom.dispose();
+      particleMat.dispose();
       renderer.dispose();
+      if (container && renderer.domElement) {
+        try {
+          container.removeChild(renderer.domElement);
+        } catch {
+          // ignore
+        }
+      }
     };
   }, []);
 
-  const isUniformPitch = isAiVoice || pitchVariance < 0.08;
-  const glowOpacity = Math.min(0.9, 0.2 + audioVolume * 0.7 + (isUniformPitch ? 0.3 : 0));
   const glowColor =
     threatLevel === 'CRITICAL'
-      ? 'rgba(239, 68, 68, '
-      : isUniformPitch
-      ? 'rgba(255, 69, 0, '
-      : 'rgba(245, 158, 11, ';
+      ? 'rgba(255,59,48,'
+      : isAiVoice
+      ? 'rgba(191,90,242,'
+      : threatLevel === 'SUSPICIOUS'
+      ? 'rgba(255,159,10,'
+      : 'rgba(48,209,88,';
 
   return (
-    <div className="liquid-tile relative flex flex-col items-center justify-center w-full py-4 px-3 sm:px-4 overflow-hidden shadow-xl">
-      {/* Dynamic Audio-Reactive Glow Aura */}
+    <div className="liquid-tile p-5 flex flex-col items-center justify-between relative overflow-hidden select-none h-full min-h-[300px]">
+      {/* Background radial glow */}
       <div
-        className="absolute w-64 sm:w-72 h-64 sm:h-72 rounded-full blur-3xl pointer-events-none transition-all duration-150"
+        className="absolute w-64 h-64 rounded-full blur-3xl pointer-events-none transition-all duration-300"
         style={{
-          backgroundColor: `${glowColor}${glowOpacity})`,
-          transform: `scale(${1 + audioVolume * 0.5})`,
+          backgroundColor: `${glowColor}${0.15 + audioVolume * 0.25})`,
+          transform: `scale(${1 + audioVolume * 0.4})`,
         }}
       />
 
-      {/* Acoustic State Badge */}
-      <div className="z-10 flex items-center gap-2 mb-1 px-3 py-1 rounded-full bg-black/60 border border-white/10 text-xs text-neutral-300">
+      {/* Apple-style Call Protection Pill */}
+      <div className="z-10 flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.06] border border-white/10 text-xs text-neutral-200">
         <span
-          className={`w-2 h-2 rounded-full transition-all duration-100 ${
-            isStreaming
-              ? threatLevel === 'CRITICAL'
-                ? 'bg-red-500 animate-ping'
-                : isUniformPitch
-                ? 'bg-[#FF4500] animate-pulse'
-                : 'bg-amber-400'
-              : 'bg-neutral-500'
+          className={`w-2 h-2 rounded-full ${
+            threatLevel === 'CRITICAL' && isStreaming
+              ? 'bg-red-500 animate-ping'
+              : isAiVoice && isStreaming
+              ? 'bg-purple-400 animate-pulse'
+              : isStreaming
+              ? 'bg-emerald-400 animate-pulse'
+              : 'bg-emerald-500'
           }`}
         />
-        <span className="font-mono text-[10px] sm:text-[11px] tracking-wider uppercase">
-          {isStreaming
-            ? isUniformPitch
-              ? 'AI SYNTHETIC VOCODER // PITCH REGULARITY'
-              : 'HUMAN HARMONIC RESONANCE // 16KHZ'
-            : 'ACOUSTIC SENSOR // STANDBY'}
+        <span className="font-medium text-[11px]">
+          {threatLevel === 'CRITICAL' && isStreaming
+            ? 'Scam Call Detected'
+            : isAiVoice && isStreaming
+            ? 'AI Voice Clone Flagged'
+            : isStreaming
+            ? 'Screening Speech'
+            : 'Call Security Active'}
         </span>
       </div>
 
-      {/* 3D Wireframe Canvas with responsive height */}
+      {/* 3D Wireframe Canvas */}
       <div
         ref={mountRef}
-        className="relative w-full h-56 sm:h-72 flex items-center justify-center cursor-grab active:cursor-grabbing"
+        className="relative w-full h-52 sm:h-60 flex items-center justify-center"
       />
 
-      {/* Default / Advanced Segmented Selector */}
-      <div className="z-10 flex items-center gap-1 p-1 mb-2.5 rounded-xl bg-black/60 border border-white/10 text-xs">
-        <button
-          onClick={() => setActiveTab('Default')}
-          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-            activeTab === 'Default'
-              ? 'bg-white/15 text-white shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          Default
-        </button>
-        <button
-          onClick={() => setActiveTab('Advanced')}
-          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-            activeTab === 'Advanced'
-              ? 'bg-white/15 text-white shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          Advanced Forensics
-        </button>
-      </div>
-
-      {/* Status description */}
-      <div className="z-10 text-center px-2 sm:px-4">
-        <p className="text-xs sm:text-sm font-medium text-neutral-200">
-          {threatLevel === 'CRITICAL'
-            ? 'Critical Extortion Alert: Urgent Call Neutralization Protocol'
-            : isUniformPitch && isStreaming
-            ? 'Hyper-uniform pitch variance detected: Potential AI Voice Clone'
+      {/* Plain English Verdict */}
+      <div className="z-10 text-center px-4">
+        <p className="text-xs sm:text-sm font-semibold text-white">
+          {threatLevel === 'CRITICAL' && isStreaming
+            ? 'High-Risk Fraud Attempt Detected'
+            : isAiVoice && isStreaming
+            ? 'Synthetic AI Voice Clone Detected'
             : isStreaming
-            ? 'Organic human pitch modulation detected (Natural Vocal Tract)'
-            : 'Nice, no threats detected matching current parameters.'}
+            ? 'Analyzing live conversation for scam patterns...'
+            : 'All incoming calls are protected in real-time'}
         </p>
-
-        <p className="text-[10px] sm:text-xs text-neutral-400 mt-1 font-mono">
-          {activeTab === 'Advanced'
-            ? `Vol: ${(audioVolume * 100).toFixed(0)}% · Pitch Variance: ${pitchVariance.toFixed(
-                3
-              )} · Pulse Multiplier: ${isUniformPitch ? '2.4x (High Jitter)' : '1.0x (Organic)'}`
-            : 'Continuous 3-second streaming spectrogram evaluation'}
+        <p className="text-[11px] text-neutral-400 mt-0.5">
+          {isStreaming
+            ? 'Dynamic audio analysis & acoustic forensics running'
+            : 'Tap "Screen My Microphone" or test any scenario below'}
         </p>
       </div>
     </div>
