@@ -4,7 +4,7 @@ nixPkgs = ["nodejs_20", "python310", "python310Packages.pip", "libsndfile"]
 
 [phases.install]
 cmds = [
-  "npm install",
+  "npm install --legacy-peer-deps",
   "python3 -m pip install -r requirements.txt --break-system-packages || python3 -m pip install fastapi uvicorn websockets pydantic numpy requests || true"
 ]
 

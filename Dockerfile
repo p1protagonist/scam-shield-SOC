@@ -16,15 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python requirements
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt || pip3 install --no-cache-dir fastapi uvicorn websockets pydantic numpy requests
 
-# Install Node dependencies
-COPY package*.json ./
-RUN npm install
+# Copy Node dependency manifests and npm configuration
+COPY package*.json .npmrc* ./
+
+# Install Node dependencies with legacy peer resolution to prevent upstream conflict
+RUN npm install --legacy-peer-deps
 
 # Copy application source code
-COPY . .
+COPY . ./
 
 # Build Vite frontend and compile server.js
 RUN npm run build
