@@ -8,6 +8,7 @@ interface WireframeSphereProps {
   isStreaming: boolean;
   threatLevel: 'SAFE' | 'SUSPICIOUS' | 'CRITICAL';
   isAiVoice: boolean;
+  isTranscribing?: boolean;
 }
 
 export const WireframeSphere: React.FC<WireframeSphereProps> = ({
@@ -16,6 +17,7 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
   isStreaming,
   threatLevel,
   isAiVoice,
+  isTranscribing = false,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -24,13 +26,15 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
   const pitchVarRef = useRef(pitchVariance);
   const threatLevelRef = useRef(threatLevel);
   const isAiVoiceRef = useRef(isAiVoice);
+  const isTranscribingRef = useRef(isTranscribing);
 
   useEffect(() => {
     volumeRef.current = audioVolume;
     pitchVarRef.current = pitchVariance;
     threatLevelRef.current = threatLevel;
     isAiVoiceRef.current = isAiVoice;
-  }, [audioVolume, pitchVariance, threatLevel, isAiVoice]);
+    isTranscribingRef.current = isTranscribing;
+  }, [audioVolume, pitchVariance, threatLevel, isAiVoice, isTranscribing]);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -55,7 +59,7 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     const wireframeGeom = new THREE.WireframeGeometry(geometry);
 
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0xff3b30,
+      color: 0x30d158,
       transparent: true,
       opacity: 0.85,
       blending: THREE.AdditiveBlending,
@@ -67,7 +71,7 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     // Inner Glowing Core Sphere
     const innerGeom = new THREE.SphereGeometry(1.1, 24, 24);
     const innerMat = new THREE.MeshBasicMaterial({
-      color: 0x22c55e,
+      color: 0x30d158,
       wireframe: true,
       transparent: true,
       opacity: 0.25,
@@ -109,9 +113,9 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
-      const elapsed = clock.getElapsedTime();
 
-      const currentVol = volumeRef.current || 0;
+      const isTranscribingNow = isTranscribingRef.current;
+      const currentVol = isTranscribingNow ? (volumeRef.current || 0) : 0;
       const currentThreat = threatLevelRef.current;
       const currentIsAi = isAiVoiceRef.current;
 
@@ -134,18 +138,30 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
         particleMat.color.setHex(0x86efac);
       }
 
-      // Smooth organic rotation
-      const rotSpeed = 0.35 + currentVol * 1.5;
-      wireframeMesh.rotation.x += delta * rotSpeed * 0.6;
-      wireframeMesh.rotation.y += delta * rotSpeed;
-      innerSphere.rotation.x -= delta * rotSpeed * 0.5;
-      innerSphere.rotation.y += delta * rotSpeed * 0.7;
-      particles.rotation.y -= delta * 0.15;
+      // CRITICAL REQUIREMENT:
+      // Must ONLY dance when actively transcribing something!
+      // Otherwise, it must stay still (zero violent dancing, resting scale & position).
+      if (isTranscribingNow && currentVol > 0.02) {
+        // Active transcription: dance smoothly to audio volume
+        const rotSpeed = 0.45 + currentVol * 1.8;
+        wireframeMesh.rotation.x += delta * rotSpeed * 0.6;
+        wireframeMesh.rotation.y += delta * rotSpeed;
+        innerSphere.rotation.x -= delta * rotSpeed * 0.5;
+        innerSphere.rotation.y += delta * rotSpeed * 0.7;
+        particles.rotation.y -= delta * 0.2;
 
-      // Voice reactive breathing
-      const pulse = 1.0 + Math.sin(elapsed * 2.0) * 0.04 + currentVol * 0.45;
-      wireframeMesh.scale.set(pulse, pulse, pulse);
-      innerSphere.scale.set(pulse * 0.9, pulse * 0.9, pulse * 0.9);
+        const pulse = 1.0 + currentVol * 0.42;
+        wireframeMesh.scale.set(pulse, pulse, pulse);
+        innerSphere.scale.set(pulse * 0.9, pulse * 0.9, pulse * 0.9);
+      } else {
+        // Not transcribing: stay still!
+        // Return scale smoothly to rest 1.0, no rotation, no violent bouncing
+        const targetScale = 1.0;
+        const currentScale = wireframeMesh.scale.x;
+        const newScale = currentScale + (targetScale - currentScale) * 0.15;
+        wireframeMesh.scale.set(newScale, newScale, newScale);
+        innerSphere.scale.set(newScale * 0.9, newScale * 0.9, newScale * 0.9);
+      }
 
       renderer.render(scene, camera);
     };
@@ -199,8 +215,8 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
       <div
         className="absolute w-64 h-64 rounded-full blur-3xl pointer-events-none transition-all duration-300"
         style={{
-          backgroundColor: `${glowColor}${0.15 + audioVolume * 0.25})`,
-          transform: `scale(${1 + audioVolume * 0.4})`,
+          backgroundColor: `${glowColor}${isTranscribing ? 0.18 + audioVolume * 0.25 : 0.08})`,
+          transform: `scale(${isTranscribing ? 1 + audioVolume * 0.35 : 1})`,
         }}
       />
 
@@ -212,9 +228,11 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
               ? 'bg-red-500 animate-ping'
               : isAiVoice && isStreaming
               ? 'bg-purple-400 animate-pulse'
-              : isStreaming
+              : isTranscribing
               ? 'bg-emerald-400 animate-pulse'
-              : 'bg-emerald-500'
+              : isStreaming
+              ? 'bg-emerald-500'
+              : 'bg-neutral-500'
           }`}
         />
         <span className="font-medium text-[11px]">
@@ -222,8 +240,10 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
             ? 'Scam Call Detected'
             : isAiVoice && isStreaming
             ? 'AI Voice Clone Flagged'
+            : isTranscribing
+            ? 'Transcribing Speech...'
             : isStreaming
-            ? 'Screening Speech'
+            ? 'Call Screening Active'
             : 'Call Security Active'}
         </span>
       </div>
@@ -241,13 +261,17 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
             ? 'High-Risk Fraud Attempt Detected'
             : isAiVoice && isStreaming
             ? 'Synthetic AI Voice Clone Detected'
+            : isTranscribing
+            ? 'Transcribing & analyzing live conversation...'
             : isStreaming
-            ? 'Analyzing live conversation for scam patterns...'
+            ? 'Call connected & protected in real-time'
             : 'All incoming calls are protected in real-time'}
         </p>
         <p className="text-[11px] text-neutral-400 mt-0.5">
-          {isStreaming
-            ? 'Dynamic audio analysis & acoustic forensics running'
+          {isTranscribing
+            ? 'Live acoustic waveform & linguistic analysis active'
+            : isStreaming
+            ? 'Listening for speech patterns'
             : 'Tap "Screen My Microphone" or test any scenario below'}
         </p>
       </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { PhoneOff, Mic, Square, ShieldAlert, Sparkles, Bot, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PhoneOff, Mic, Square, ShieldAlert, Bot, UserCheck } from 'lucide-react';
 import { CallerInfo } from '../types';
 
 interface MobileActiveCallBarProps {
@@ -12,6 +12,7 @@ interface MobileActiveCallBarProps {
   onHangup: () => void;
   onToggleMic: () => void;
   audioVolume: number;
+  callStartTime?: number | null;
 }
 
 export const MobileActiveCallBar: React.FC<MobileActiveCallBarProps> = ({
@@ -24,13 +25,46 @@ export const MobileActiveCallBar: React.FC<MobileActiveCallBarProps> = ({
   onHangup,
   onToggleMic,
   audioVolume,
+  callStartTime = null,
 }) => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isStreaming || !callStartTime) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    // Set initial elapsed seconds immediately
+    setElapsedSeconds(Math.max(0, Math.floor((Date.now() - callStartTime) / 1000)));
+
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - callStartTime) / 1000)));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isStreaming, callStartTime]);
+
   if (!isStreaming) return null;
 
   const isCritical = threatLevel === 'CRITICAL';
 
+  // Format as mm:ss or hh:mm:ss like native iOS Phone
+  const formatTimer = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    return `${pad(minutes)}:${pad(seconds)}`;
+  };
+
   return (
-    <div className="lg:hidden mx-3 mb-3 p-3.5 rounded-3xl bg-black/85 backdrop-blur-2xl border border-white/15 shadow-2xl relative overflow-hidden animate-fadeIn select-none">
+    <div className="lg:hidden mx-3 mb-3 p-3.5 rounded-3xl bg-black/90 backdrop-blur-2xl border border-white/15 shadow-2xl relative overflow-hidden animate-fadeIn select-none">
       {/* Top ambient threat illumination */}
       <div
         className={`absolute inset-0 opacity-20 pointer-events-none transition-all ${
@@ -43,7 +77,7 @@ export const MobileActiveCallBar: React.FC<MobileActiveCallBarProps> = ({
       />
 
       <div className="relative z-10 flex items-center justify-between gap-3">
-        {/* Caller Avatar & Status */}
+        {/* Caller Avatar & Status with Apple Timer */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div
             className={`w-9 h-9 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${
@@ -65,7 +99,7 @@ export const MobileActiveCallBar: React.FC<MobileActiveCallBarProps> = ({
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white truncate">
+              <span className="text-xs font-bold text-white truncate max-w-[140px] sm:max-w-[200px]">
                 {activeCaller?.name || activePresetTitle || (isMicActive ? 'Live Microphone' : 'Active Intercept')}
               </span>
               <span
@@ -81,31 +115,35 @@ export const MobileActiveCallBar: React.FC<MobileActiveCallBarProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-[10px] text-neutral-400 font-mono mt-0.5">
-              <span>{activeCaller?.phone_number || (isMicActive ? 'Hardware Mic' : '+18002758777')}</span>
-              <span>&middot;</span>
-              <span className="text-neutral-300 font-sans">
-                Vol: {(audioVolume * 100).toFixed(0)}%
+            {/* Apple-style Persistent Real-Time Call Timer & Number */}
+            <div className="flex items-center gap-1.5 text-[11px] font-mono mt-0.5">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold tabular-nums">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{formatTimer(elapsedSeconds)}</span>
+              </span>
+              <span className="text-neutral-500">&middot;</span>
+              <span className="text-neutral-400 truncate max-w-[110px]">
+                {activeCaller?.phone_number || (isMicActive ? 'Hardware Mic' : '+18002758777')}
               </span>
             </div>
           </div>
         </div>
 
         {/* Action Controls: Mic Mute/Toggle + One-Tap Red Hang Up Button */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {isMicActive && (
             <button
               onClick={onToggleMic}
               className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
               title="Stop Microphone"
             >
-              <Square className="w-4 h-4 fill-white" />
+              <Square className="w-3.5 h-3.5 fill-white" />
             </button>
           )}
 
           <button
             onClick={onHangup}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white shadow-lg shadow-red-600/40 text-xs font-bold transition-all"
+            className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white shadow-lg shadow-red-600/40 text-xs font-bold transition-all"
           >
             <PhoneOff className="w-3.5 h-3.5" />
             <span>End Call</span>

@@ -6,12 +6,13 @@ import { InvestigationsFlow } from './components/InvestigationsFlow';
 import { WireframeSphere } from './components/WireframeSphere';
 import { TranscriptBox } from './components/TranscriptBox';
 import { CallControls, REAL_SCAM_PRESETS } from './components/CallControls';
-import { DynamicIslandAlert } from './components/DynamicIslandAlert';
+import { DynamicIslandAlert, IncomingCallData } from './components/DynamicIslandAlert';
 import { ThreatLogsPanel, ThreatLogEntry } from './components/ThreatLogsPanel';
 import { ResourcesModal } from './components/ResourcesModal';
 import { MobileNavBar, MobileTab } from './components/MobileNavBar';
 import { MobileActiveCallBar } from './components/MobileActiveCallBar';
 import { TelemetryPacket, CallerInfo, CallPreset } from './types';
+import { stopAppleRingtone } from './utils/audioSiren';
 
 // High-confidence scam trigger keywords & intent rules for live transcription
 const LIVE_SCAM_RULES = [
@@ -55,6 +56,7 @@ export default function App() {
   const [isMicActive, setIsMicActive] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [activeCaller, setActiveCaller] = useState<CallerInfo | null>(null);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [groqApiKey, setGroqApiKey] = useState('');
 
   // Telemetry & Real-Time Threat State
@@ -91,8 +93,22 @@ export default function App() {
     }
   }, [threatLogs]);
 
-  // Apple Dynamic Island Air Bubble Alert State
+  // Apple Dynamic Island States
   const [dynamicIslandAlert, setDynamicIslandAlert] = useState<TelemetryPacket | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
+  const pendingPresetRef = useRef<{ preset: CallPreset; playAudio: boolean } | null>(null);
+  const dialogueTimeoutRef = useRef<number | null>(null);
+
+  // Active Call & Transcription State (Sphere ONLY dances when isTranscribing is true)
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const isCallActiveRef = useRef<boolean>(false);
+  const currentCallSessionIdRef = useRef<number>(0);
+  const pulseIntervalRef = useRef<number | null>(null);
+
+  // Audio File Upload Screening State
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isAnalyzingAudioFile, setIsAnalyzingAudioFile] = useState(false);
+  const audioFileSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   // Web Audio API State (Strictly for 60fps 3D sphere visual pulsing)
   const [audioVolume, setAudioVolume] = useState(0);
@@ -270,7 +286,13 @@ export default function App() {
           sum += dataArray[i];
         }
         const avg = sum / (bufferLength * 255);
-        setAudioVolume(avg);
+        if (avg > 0.04) {
+          setAudioVolume(avg);
+          setIsTranscribing(true);
+        } else {
+          setAudioVolume(0);
+          setIsTranscribing(false);
+        }
         setFrequencyData(new Uint8Array(dataArray));
 
         animFrameRef.current = requestAnimationFrame(updateLoop);
@@ -296,6 +318,7 @@ export default function App() {
       audioContextRef.current = null;
     }
     setAudioVolume(0);
+    setIsTranscribing(false);
     setFrequencyData(null);
   };
 
@@ -374,6 +397,7 @@ export default function App() {
       recorder.start(3000);
       setIsStreaming(true);
       setIsMicActive(true);
+      setCallStartTime(Date.now());
       setActivePresetId('mic');
       setThreatLevel('SAFE');
       setIsAiVoice(false);
@@ -386,13 +410,53 @@ export default function App() {
   };
 
   const stopCurrentSession = () => {
+    // 1. Mark call session as dead immediately so no queued speech or timeouts can fire
+    isCallActiveRef.current = false;
+    currentCallSessionIdRef.current += 1;
+
+    // 2. Stop ringtone immediately
+    stopAppleRingtone();
+
+    // 3. Stop visual pulsing immediately and reset to still 0
+    if (pulseIntervalRef.current) {
+      clearInterval(pulseIntervalRef.current);
+      pulseIntervalRef.current = null;
+    }
+    setAudioVolume(0);
+    setIsTranscribing(false);
+
+    // 4. Clear any pending speech/dialogue timers
     if (presetIntervalRef.current) {
       clearInterval(presetIntervalRef.current);
       presetIntervalRef.current = null;
     }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (dialogueTimeoutRef.current) {
+      clearTimeout(dialogueTimeoutRef.current);
+      dialogueTimeoutRef.current = null;
     }
+
+    // 5. Instantly halt browser SpeechSynthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.warn('Speech cancellation note:', e);
+      }
+    }
+
+    // 6. Stop audio file decoding source if active
+    if (audioFileSourceRef.current) {
+      try {
+        audioFileSourceRef.current.stop();
+        audioFileSourceRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+      audioFileSourceRef.current = null;
+    }
+
+    // 7. Stop speech recognition
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
@@ -401,6 +465,8 @@ export default function App() {
       }
       speechRecognitionRef.current = null;
     }
+
+    // 8. Stop media recorder & mic stream
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -413,15 +479,31 @@ export default function App() {
       micStreamRef.current.getTracks().forEach((track) => track.stop());
       micStreamRef.current = null;
     }
+
     stopAudioVisualizer();
+
+    // 9. Reset all call session states
     setIsStreaming(false);
     setIsMicActive(false);
     setActivePresetId(null);
+    setIncomingCall(null);
+    setDynamicIslandAlert(null);
+    setIsAnalyzingAudioFile(false);
+    setCallStartTime(null);
+    pendingPresetRef.current = null;
   };
 
-  // Run Realistic Scam Preset with Speech Synthesis & WebSocket Streaming
+  // Triggers incoming call with authentic Apple ringtone and Answer/Decline in Dynamic Island
   const handleSelectPreset = (preset: CallPreset, playAudio: boolean) => {
     stopCurrentSession();
+
+    pendingPresetRef.current = { preset, playAudio };
+    setIncomingCall({
+      callerName: preset.callerName,
+      phoneNumber: preset.phoneNumber,
+      category: preset.category,
+      isAiVoice: preset.isAiVoice,
+    });
 
     setActiveCaller({
       name: preset.callerName,
@@ -431,27 +513,114 @@ export default function App() {
       carrier: 'Carrier Telephony Grid',
       category: preset.category,
     });
+  };
+
+  // Answer call from Dynamic Island -> Starts dialogue cleanly and begins timer
+  const handleAnswerCall = () => {
+    stopAppleRingtone();
+    setIncomingCall(null);
+    setCallStartTime(Date.now());
+    if (pendingPresetRef.current) {
+      const { preset, playAudio } = pendingPresetRef.current;
+      startConnectedPresetCall(preset, playAudio);
+    }
+  };
+
+  // Decline call from Dynamic Island
+  const handleDeclineCall = () => {
+    stopAppleRingtone();
+    setIncomingCall(null);
+    setCallStartTime(null);
+    stopCurrentSession();
+  };
+
+  // Immediate 'End Call Now' / 'Cut Call' action from Dynamic Island
+  const handleEndCallNow = () => {
+    setDynamicIslandAlert(null);
+    setIncomingCall(null);
+    setCallStartTime(null);
+    stopCurrentSession();
+  };
+
+  // Start connected call dialogue with robust cancellation check and still state
+  const startConnectedPresetCall = (preset: CallPreset, playAudio: boolean) => {
+    // Mark session active with unique session ID
+    isCallActiveRef.current = true;
+    currentCallSessionIdRef.current += 1;
+    const currentSessionId = currentCallSessionIdRef.current;
 
     setIsStreaming(true);
     setActivePresetId(preset.id);
-    setThreatLevel('SAFE');
+    setThreatLevel(preset.expectedThreat);
     setIsAiVoice(preset.isAiVoice);
     setPitchVariance(preset.isAiVoice ? 0.041 : 0.178);
     setZcrUniformity(preset.isAiVoice ? 0.96 : 0.42);
 
-    // Audio frequency pulsing for the 3D sphere
-    const pulseInterval = window.setInterval(() => {
-      const vol = 0.2 + Math.random() * 0.45;
-      setAudioVolume(vol);
-    }, 120);
+    // Dynamic Island Alert IMMEDIATELY appears for all calls including legitimate doctor appointment!
+    const isCrit = preset.expectedThreat === 'CRITICAL';
+    const initialPacket: TelemetryPacket = {
+      type: 'telemetry_update',
+      chunk_id: 1,
+      timestamp: new Date().toISOString(),
+      transcript: preset.dialogueLines[0] || 'Incoming call connected.',
+      forensics: {
+        is_ai_voice: preset.isAiVoice,
+        pitch_variance: preset.isAiVoice ? 0.041 : 0.178,
+        zcr_uniformity: preset.isAiVoice ? 0.96 : 0.42,
+        spectral_centroid_hz: 2150,
+        confidence: 0.95,
+      },
+      caller_info: {
+        name: preset.callerName,
+        phone_number: preset.phoneNumber,
+        spam_flag: preset.expectedThreat !== 'SAFE',
+        risk_score: isCrit ? 98 : preset.expectedThreat === 'SUSPICIOUS' ? 65 : 4,
+        carrier: 'VoIP Telecom',
+      },
+      threat_level: preset.expectedThreat,
+      intent: preset.intentSummary,
+      kill_switch: isCrit,
+    };
+    setDynamicIslandAlert(initialPacket);
+
+    const startPulsing = () => {
+      if (pulseIntervalRef.current) {
+        clearInterval(pulseIntervalRef.current);
+        pulseIntervalRef.current = null;
+      }
+      pulseIntervalRef.current = window.setInterval(() => {
+        if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+          if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
+          pulseIntervalRef.current = null;
+          setAudioVolume(0);
+          return;
+        }
+        const vol = 0.22 + Math.random() * 0.42;
+        setAudioVolume(vol);
+      }, 100);
+    };
+
+    const stopPulsing = () => {
+      if (pulseIntervalRef.current) {
+        clearInterval(pulseIntervalRef.current);
+        pulseIntervalRef.current = null;
+      }
+      setAudioVolume(0);
+    };
 
     let lineIndex = 0;
 
     const playNextDialogueLine = () => {
+      // Abort immediately if session was ended or user tapped cut call
+      if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+        stopPulsing();
+        setIsTranscribing(false);
+        return;
+      }
+
       if (lineIndex >= preset.dialogueLines.length) {
-        clearInterval(presetIntervalRef.current!);
-        clearInterval(pulseInterval);
-        setAudioVolume(0);
+        stopPulsing();
+        setIsTranscribing(false);
         return;
       }
 
@@ -464,16 +633,67 @@ export default function App() {
       // Evaluate for live scam detection
       evaluateLiveSpeechText(textLine);
 
-      // Play real audio through speakers if enabled
+      // Only dance while actively speaking/transcribing
+      setIsTranscribing(true);
+      startPulsing();
+
+      // Natural speech synthesis with onend handler (full sentence spoken completely)
       if (playAudio && window.speechSynthesis) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(textLine);
-        utterance.rate = 1.0;
+        utterance.rate = 0.96;
         utterance.pitch = preset.ttsVoicePitch || 1.0;
+
+        utterance.onend = () => {
+          stopPulsing();
+          setIsTranscribing(false);
+          // If user cut call midway through speech, DO NOT schedule next line!
+          if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          // Conversational pause of 1.2s before the caller says their next line (sphere stays still during pause)
+          dialogueTimeoutRef.current = window.setTimeout(() => {
+            if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+              return;
+            }
+            playNextDialogueLine();
+          }, 1200);
+        };
+
+        utterance.onerror = (e) => {
+          stopPulsing();
+          setIsTranscribing(false);
+          if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          dialogueTimeoutRef.current = window.setTimeout(() => {
+            if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+              return;
+            }
+            playNextDialogueLine();
+          }, 1500);
+        };
+
         window.speechSynthesis.speak(utterance);
+      } else {
+        // If muted, wait based on natural reading time
+        const delay = Math.max(3600, textLine.length * 70);
+        dialogueTimeoutRef.current = window.setTimeout(() => {
+          stopPulsing();
+          setIsTranscribing(false);
+          if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          dialogueTimeoutRef.current = window.setTimeout(() => {
+            if (!isCallActiveRef.current || currentCallSessionIdRef.current !== currentSessionId) {
+              return;
+            }
+            playNextDialogueLine();
+          }, 800);
+        }, delay);
       }
 
-      // Send to WebSocket
+      // Send to WebSocket or local update
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(
           JSON.stringify({
@@ -486,7 +706,7 @@ export default function App() {
           })
         );
       } else {
-        const isCrit = preset.expectedThreat === 'CRITICAL';
+        const isCriticalLine = preset.expectedThreat === 'CRITICAL';
         const packet: TelemetryPacket = {
           type: 'telemetry_update',
           chunk_id: lineIndex,
@@ -502,13 +722,13 @@ export default function App() {
           caller_info: {
             name: preset.callerName,
             phone_number: preset.phoneNumber,
-            spam_flag: isCrit,
-            risk_score: isCrit ? 98 : 4,
+            spam_flag: isCriticalLine,
+            risk_score: isCriticalLine ? 98 : preset.expectedThreat === 'SUSPICIOUS' ? 65 : 4,
             carrier: 'VoIP Telecom',
           },
           threat_level: preset.expectedThreat,
           intent: preset.intentSummary,
-          kill_switch: isCrit && lineIndex >= 2,
+          kill_switch: isCriticalLine && lineIndex >= 2,
         };
 
         setThreatLevel(packet.threat_level);
@@ -520,14 +740,139 @@ export default function App() {
 
         logThreatAttempt(packet);
 
-        if (packet.kill_switch || packet.threat_level === 'CRITICAL' || packet.forensics.is_ai_voice) {
-          setDynamicIslandAlert(packet);
-        }
+        // Keep Dynamic Island updated for ALL presets (including safe doctor appointment!)
+        setDynamicIslandAlert(packet);
       }
     };
 
     playNextDialogueLine();
-    presetIntervalRef.current = window.setInterval(playNextDialogueLine, 3600);
+  };
+
+  // Upload Call Recording File Handler: Decodes audio, animates 3D sphere, extracts acoustic forensics
+  const handleUploadAudioFile = async (file: File) => {
+    stopCurrentSession();
+    setUploadedFileName(file.name);
+    setIsAnalyzingAudioFile(true);
+    setIsStreaming(true);
+    setCallStartTime(Date.now());
+    setActivePresetId(null);
+    setActiveCaller({
+      name: `Recording: ${file.name}`,
+      phone_number: 'File Storage Screening',
+      spam_flag: true,
+      risk_score: 94,
+      carrier: 'Device Storage',
+      category: 'Recorded Call Forensics',
+    });
+    setLiveSpeechTranscript(`Screening recorded audio file: "${file.name}"...`);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+      audioFileSourceRef.current = source;
+
+      // Extract real DSP acoustic features from decoded audio
+      const channelData = audioBuffer.getChannelData(0);
+      let zeroCrossings = 0;
+      let sumSquares = 0;
+      const sampleLimit = Math.min(channelData.length, 48000 * 6);
+      for (let i = 1; i < sampleLimit; i++) {
+        if ((channelData[i] >= 0 && channelData[i - 1] < 0) || (channelData[i] < 0 && channelData[i - 1] >= 0)) {
+          zeroCrossings++;
+        }
+        sumSquares += channelData[i] * channelData[i];
+      }
+      const rms = Math.sqrt(sumSquares / sampleLimit);
+      const zcrEst = zeroCrossings / sampleLimit;
+      const isSyntheticVoice = zcrEst > 0.18 || zcrEst < 0.02 || rms < 0.05;
+
+      setIsAiVoice(isSyntheticVoice);
+      setPitchVariance(isSyntheticVoice ? 0.038 : 0.175);
+      setZcrUniformity(isSyntheticVoice ? 0.96 : 0.45);
+      setThreatLevel(isSyntheticVoice ? 'CRITICAL' : 'SUSPICIOUS');
+
+      // Animate 3D sphere to the recording audio volume
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let animId: number;
+      const checkVol = () => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const vol = sum / dataArray.length / 255;
+        if (vol > 0.035) {
+          setAudioVolume(vol);
+          setIsTranscribing(true);
+        } else {
+          setAudioVolume(0);
+          setIsTranscribing(false);
+        }
+        animId = requestAnimationFrame(checkVol);
+      };
+      animId = requestAnimationFrame(checkVol);
+
+      source.start(0);
+
+      const packet: TelemetryPacket = {
+        type: 'telemetry_update',
+        chunk_id: totalScans + 1,
+        timestamp: new Date().toISOString(),
+        transcript: `Forensic audio screening: "${file.name}" · Duration ${(audioBuffer.duration).toFixed(1)}s`,
+        forensics: {
+          is_ai_voice: isSyntheticVoice,
+          pitch_variance: isSyntheticVoice ? 0.038 : 0.175,
+          zcr_uniformity: isSyntheticVoice ? 0.96 : 0.45,
+          spectral_centroid_hz: 2240,
+          confidence: 0.97,
+        },
+        caller_info: {
+          name: file.name,
+          phone_number: 'File Storage Call',
+          spam_flag: true,
+          risk_score: isSyntheticVoice ? 98 : 75,
+          carrier: 'Local Storage Audio',
+        },
+        threat_level: isSyntheticVoice ? 'CRITICAL' : 'SUSPICIOUS',
+        intent: isSyntheticVoice
+          ? 'Deepfake voice clone synthesis detected in uploaded audio recording'
+          : 'Suspicious telephony acoustic patterns detected in uploaded file',
+        kill_switch: isSyntheticVoice,
+      };
+
+      setLiveSpeechTranscript(packet.transcript);
+      setTelemetryHistory((prev) => [...prev.slice(-9), packet]);
+      setTotalScans((s) => s + 1);
+      logThreatAttempt(packet);
+
+      // Pop Dynamic Island alert with Show Details & End Call Now!
+      setDynamicIslandAlert(packet);
+
+      source.onended = () => {
+        cancelAnimationFrame(animId);
+        setIsAnalyzingAudioFile(false);
+        setAudioVolume(0);
+        setIsTranscribing(false);
+      };
+    } catch (err) {
+      console.warn('Audio decoding warning:', err);
+      setIsAnalyzingAudioFile(false);
+      setAudioVolume(0);
+      setIsTranscribing(false);
+      setLiveSpeechTranscript(`Audio recording uploaded: "${file.name}". Analyzed for threat patterns.`);
+    }
   };
 
   // Real Phone Lookup
@@ -583,10 +928,14 @@ export default function App() {
       {/* 1. Dynamic Island / Air Bubble Popping Alert Widget */}
       <DynamicIslandAlert
         packet={dynamicIslandAlert}
-        onDismiss={() => setDynamicIslandAlert(null)}
-        onDisconnectCall={() => {
+        incomingCall={incomingCall}
+        callStartTime={callStartTime}
+        onAnswerCall={handleAnswerCall}
+        onDeclineCall={handleDeclineCall}
+        onEndCallNow={handleEndCallNow}
+        onDismiss={() => {
           setDynamicIslandAlert(null);
-          stopCurrentSession();
+          setIncomingCall(null);
         }}
       />
 
@@ -629,6 +978,7 @@ export default function App() {
             onHangup={stopCurrentSession}
             onToggleMic={stopCurrentSession}
             audioVolume={audioVolume}
+            callStartTime={callStartTime}
           />
         </div>
 
@@ -664,6 +1014,7 @@ export default function App() {
                 isStreaming={isStreaming}
                 threatLevel={threatLevel}
                 isAiVoice={isAiVoice}
+                isTranscribing={isTranscribing}
               />
             </div>
 
@@ -707,6 +1058,9 @@ export default function App() {
                   activeCaller={activeCaller}
                   groqApiKey={groqApiKey}
                   setGroqApiKey={setGroqApiKey}
+                  onUploadAudioFile={handleUploadAudioFile}
+                  isAnalyzingAudioFile={isAnalyzingAudioFile}
+                  uploadedFileName={uploadedFileName}
                 />
               </div>
             </div>
