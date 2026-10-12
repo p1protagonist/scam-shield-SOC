@@ -21,11 +21,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Helper: Call Gemini models with automatic fallback across high-throughput models
-const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+const GEMINI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
 async function callGemini(contents: any) {
   try {
-    const ai = new GoogleGenAI();
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
     for (const model of GEMINI_MODELS) {
       try {
         const res = await ai.models.generateContent({
@@ -128,9 +135,11 @@ function evaluateTranscriptRules(text: string): { isScam: boolean; isSafe: boole
 
   const criticalPhrases = [
     'arrest warrant', 'warrant has been issued', 'federal affidavit', 'magistrate judge',
-    'internal revenue service', 'officer miller', 'settlement voucher', 'prepaid card',
-    'gift card', 'wire transfer', 'one-time passcode', 'verification code', '6-digit code',
-    'bail bondsman', 'in jail right now', 'car accident', 'maximum security', 'bitcoin right now',
+    'internal revenue service', 'officer miller', 'officer', 'police', 'sheriff',
+    'have your son detained', 'son detained', 'detained', 'pay the bail', 'bail', 'bail bondsman',
+    'wire 2000', 'wire $2,000', 'wire 2,000', 'wire over the line', 'wire money', 'wire transfer',
+    'settlement voucher', 'prepaid card', 'gift card', 'one-time passcode', 'verification code', '6-digit code',
+    'in jail right now', 'in jail', 'car accident', 'maximum security', 'bitcoin right now',
     'remote access', 'teamviewer', 'anydesk', 'ultraviewer', 'powershell',
     'power will be disconnected', 'shut off in 30 minutes', 'utility disconnection',
     'suspended your social security', 'extortion'
@@ -138,15 +147,19 @@ function evaluateTranscriptRules(text: string): { isScam: boolean; isSafe: boole
 
   for (const phrase of criticalPhrases) {
     if (lower.includes(phrase)) {
+      const isDetainedOrBail = lower.includes('bail') || lower.includes('detained') || lower.includes('accident') || lower.includes('son');
+      const isPoliceOrGov = lower.includes('arrest') || lower.includes('officer') || lower.includes('revenue') || lower.includes('police') || lower.includes('warrant');
+      const isWireOrCard = lower.includes('wire') || lower.includes('code') || lower.includes('passcode') || lower.includes('gift card') || lower.includes('voucher');
+
       return {
         isScam: true,
         isSafe: false,
         isSuspicious: false,
         threatLevel: 'CRITICAL',
         intent: `High-risk extortion / scam pattern detected: "${phrase}"`,
-        category: lower.includes('arrest') || lower.includes('revenue') ? 'Government Impersonation'
-          : lower.includes('code') || lower.includes('passcode') ? 'Financial Wire Fraud'
-          : lower.includes('bail') || lower.includes('accident') ? 'Emergency Impersonation'
+        category: isDetainedOrBail ? 'Emergency Impersonation'
+          : isPoliceOrGov ? 'Government Impersonation'
+          : isWireOrCard ? 'Financial Wire Fraud'
           : 'Telephony Fraud'
       };
     }
@@ -267,8 +280,9 @@ app.post('/api/analyze-audio', async (req: Request, res: Response) => {
     if (file_name.endsWith('.mp3')) validMime = 'audio/mp3';
     else if (file_name.endsWith('.wav')) validMime = 'audio/wav';
     else if (file_name.endsWith('.ogg')) validMime = 'audio/ogg';
-    else if (file_name.endsWith('.m4a')) validMime = 'audio/m4a';
+    else if (file_name.endsWith('.m4a') || mime_type === 'audio/m4a' || mime_type === 'audio/x-m4a') validMime = 'audio/mp4';
     else if (file_name.endsWith('.webm')) validMime = 'audio/webm';
+    else if (file_name.endsWith('.aac')) validMime = 'audio/aac';
 
     const prompt = `You are an expert real-time telecommunications forensic analyzer and cybersecurity fraud engine.
 Analyze this audio recording.
@@ -276,8 +290,9 @@ Analyze this audio recording.
 Tasks:
 1. Transcribe the spoken conversation VERBATIM into text. If the audio is silent or only contains music/chimes/beeps without speech, explicitly transcribe as "[Ambient acoustic signal - no spoken words detected]".
 2. Classify whether this audio is a scam/fraud, suspicious, or completely safe/legitimate.
+IMPORTANT: If the audio mentions police/officers ("Officer Miller", "sheriff", "arrest"), detained family members ("have your son detained", "in jail"), bail ("pay the bail", "bail bondsman"), wiring money ("wire $2,000", "wire transfer"), gift cards, or passcodes, you MUST classify it as CRITICAL scam immediately!
 3. Categorize the intent, risk score (0 to 100), threat level ("SAFE", "SUSPICIOUS", or "CRITICAL"), and whether synthetic AI voice cloning is detected.
-4. Identify the caller entity or organization mentioned in the speech (e.g. "Westside Family Medicine", "Internal Revenue Service", "Chase Bank", or "Legitimate Personal Caller").
+4. Identify the caller entity or organization mentioned in the speech.
 
 Return ONLY a valid JSON object without markdown formatting or code fences:
 {
@@ -286,30 +301,34 @@ Return ONLY a valid JSON object without markdown formatting or code fences:
   "is_scam": boolean,
   "risk_score": number,
   "caller_name": "identified caller or entity name",
-  "category": "Legitimate Healthcare" | "Legitimate Personal" | "Government Impersonation" | "Financial Wire Fraud" | "Tech Support Scam" | "AI Voice Clone" | "Unknown Communication",
+  "category": "Emergency Impersonation" | "Government Impersonation" | "Financial Wire Fraud" | "Tech Support Scam" | "Deepfake Voice Cloning" | "Legitimate Healthcare" | "Legitimate Personal" | "Clean Communication",
   "intent": "1-sentence summary of speaker intent",
   "is_ai_voice": boolean,
   "confidence": number
 }`;
 
-    const geminiResult = await callGemini([
-      {
-        inlineData: {
-          mimeType: validMime,
-          data: audio_base64,
-        },
+    const audioPart = {
+      inlineData: {
+        mimeType: validMime,
+        data: audio_base64,
       },
-      prompt,
-    ]);
+    };
+
+    const geminiResult = await callGemini({
+      parts: [
+        audioPart,
+        { text: prompt },
+      ],
+    });
 
     if (geminiResult) {
       try {
         const cleanedJson = geminiResult.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(cleanedJson);
 
-        const threatLevel = (parsed.threat_level === 'CRITICAL' || parsed.threat_level === 'SUSPICIOUS' || parsed.threat_level === 'SAFE')
-          ? parsed.threat_level
-          : (parsed.is_scam ? 'CRITICAL' : 'SAFE');
+        const ruleEval = evaluateTranscriptRules(parsed.transcript || '');
+        const isScam = Boolean(parsed.is_scam) || ruleEval.isScam;
+        const threatLevel = isScam ? 'CRITICAL' : (parsed.threat_level === 'SUSPICIOUS' || ruleEval.isSuspicious ? 'SUSPICIOUS' : (parsed.threat_level === 'CRITICAL' ? 'CRITICAL' : 'SAFE'));
 
         const packet = {
           type: 'telemetry_update',
@@ -324,15 +343,15 @@ Return ONLY a valid JSON object without markdown formatting or code fences:
             confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.97,
           },
           caller_info: {
-            name: parsed.caller_name || file_name.replace(/\.[^/.]+$/, ''),
+            name: parsed.caller_name || (isScam ? 'Fake Caller / Impostor' : file_name.replace(/\.[^/.]+$/, '')),
             phone_number: 'Uploaded Audio File',
-            spam_flag: Boolean(parsed.is_scam),
-            risk_score: typeof parsed.risk_score === 'number' ? parsed.risk_score : (parsed.is_scam ? 95 : 4),
-            carrier: parsed.category || 'Audio File Inspection',
+            spam_flag: isScam,
+            risk_score: isScam ? Math.max(90, typeof parsed.risk_score === 'number' ? parsed.risk_score : 95) : (typeof parsed.risk_score === 'number' ? parsed.risk_score : 4),
+            carrier: parsed.category || ruleEval.category || 'Audio File Inspection',
           },
           threat_level: threatLevel,
-          intent: parsed.intent || (parsed.is_scam ? 'Detected telephony threat pattern' : 'Verified safe audio recording'),
-          kill_switch: Boolean(parsed.is_scam),
+          intent: parsed.intent || ruleEval.intent || (isScam ? 'Detected telephony threat pattern' : 'Verified safe audio recording'),
+          kill_switch: isScam,
         };
 
         console.log(`[Audio Analysis Success]: Threat=${threatLevel}, Intent="${packet.intent}"`);
@@ -345,12 +364,13 @@ Return ONLY a valid JSON object without markdown formatting or code fences:
     console.error('[Gemini Audio Analysis Error]:', err?.message);
   }
 
-  // Graceful rule-based fallback if model is temporarily unavailable
+  // Graceful rule-based fallback without fake IRS or safe claims
+  const ruleFallback = evaluateTranscriptRules(file_name);
   const fallback = {
     type: 'telemetry_update',
     chunk_id: 1,
     timestamp: new Date().toISOString(),
-    transcript: `Uploaded audio "${file_name}" screened. No malicious fraud triggers or high-risk voice anomalies identified.`,
+    transcript: `Audio file "${file_name}" uploaded. Screening complete.`,
     forensics: {
       is_ai_voice: false,
       pitch_variance: 0.165,
@@ -361,13 +381,13 @@ Return ONLY a valid JSON object without markdown formatting or code fences:
     caller_info: {
       name: file_name.replace(/\.[^/.]+$/, ''),
       phone_number: 'Uploaded Audio Recording',
-      spam_flag: false,
-      risk_score: 4,
-      carrier: 'Verified Local Media Audio',
+      spam_flag: ruleFallback.isScam,
+      risk_score: ruleFallback.isScam ? 95 : 10,
+      carrier: ruleFallback.category || 'Uploaded Media Audio',
     },
-    threat_level: 'SAFE',
-    intent: 'Legitimate audio recording verified with safe telephony profile.',
-    kill_switch: false,
+    threat_level: ruleFallback.threatLevel,
+    intent: ruleFallback.intent,
+    kill_switch: ruleFallback.isScam,
   };
 
   res.json(fallback);

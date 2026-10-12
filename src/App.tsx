@@ -13,6 +13,7 @@ import { MobileNavBar, MobileTab } from './components/MobileNavBar';
 import { MobileActiveCallBar } from './components/MobileActiveCallBar';
 import { TelemetryPacket, CallerInfo, CallPreset } from './types';
 import { stopAppleRingtone } from './utils/audioSiren';
+import { audioBufferToWavBase64 } from './utils/audioEncoder';
 
 // High-confidence scam trigger keywords & intent rules for live transcription
 const LIVE_SCAM_RULES = [
@@ -62,8 +63,28 @@ const LIVE_SCAM_RULES = [
     threat: 'CRITICAL' as const,
   },
   {
-    triggers: ['bail', 'jail', 'car accident', 'police station', "don't tell mom", 'grandma', 'tommy', 'bail bondsman', 'maximum security'],
-    intent: 'Virtual Kidnapping / Bail extortion targeting family members',
+    triggers: [
+      'officer miller',
+      'detained',
+      'have your son',
+      'your son detained',
+      'pay the bail',
+      'wire 2000',
+      'wire $2,000',
+      'wire 2,000',
+      'wire over the line',
+      'wire money',
+      'bail',
+      'jail',
+      'car accident',
+      'police station',
+      "don't tell mom",
+      'grandma',
+      'tommy',
+      'bail bondsman',
+      'maximum security',
+    ],
+    intent: 'Law enforcement impersonation & fabricated family detention bail extortion',
     threat: 'CRITICAL' as const,
   },
   {
@@ -469,6 +490,10 @@ export default function App() {
       startAudioVisualizer(stream);
 
       isMicActiveRef.current = true;
+      setIsMicActive(true);
+      setIsStreaming(true);
+      setCallStartTime(Date.now());
+      updateActivePresetId('mic');
       latestSpeechTextRef.current = '';
       accumulatedTranscriptRef.current = '';
 
@@ -484,6 +509,26 @@ export default function App() {
       updateThreatLevel('SAFE');
       setIsAiVoice(false);
       setLiveSpeechTranscript('Listening to your microphone... Speak to analyze speech in real-time.');
+
+      // Pop Apple Dynamic Island alert immediately so user sees live screening status & timer
+      const initialPacket: TelemetryPacket = {
+        type: 'telemetry_update',
+        chunk_id: 1,
+        timestamp: new Date().toISOString(),
+        transcript: 'Listening to your microphone... Speak to analyze speech in real-time.',
+        forensics: {
+          is_ai_voice: false,
+          pitch_variance: 0.17,
+          zcr_uniformity: 0.44,
+          spectral_centroid_hz: 2150,
+          confidence: 0.98,
+        },
+        caller_info: micCaller,
+        threat_level: 'SAFE',
+        intent: 'Active microphone screening in real-time',
+        kill_switch: false,
+      };
+      setDynamicIslandAlert(initialPacket);
 
       // 1. Live Client-Side Speech-to-Text with auto-restart on pauses
       const SpeechRecognition =
@@ -518,6 +563,25 @@ export default function App() {
               setLiveSpeechTranscript(currentFull);
               latestSpeechTextRef.current = currentFull;
               evaluateLiveSpeechText(currentFull);
+
+              // Keep Dynamic Island alert synchronized with live spoken words
+              setDynamicIslandAlert((prev) => ({
+                type: 'live_speech_update',
+                chunk_id: (prev?.chunk_id || 1) + 1,
+                timestamp: new Date().toISOString(),
+                transcript: currentFull,
+                forensics: prev?.forensics || {
+                  is_ai_voice: false,
+                  pitch_variance: 0.17,
+                  zcr_uniformity: 0.44,
+                  spectral_centroid_hz: 2150,
+                  confidence: 0.98,
+                },
+                caller_info: activeCallerRef.current || micCaller,
+                threat_level: threatLevelRef.current,
+                intent: threatLevelRef.current === 'CRITICAL' ? 'High-risk extortion phrase identified in speech' : 'Real-time conversational speech stream',
+                kill_switch: threatLevelRef.current === 'CRITICAL',
+              }));
 
               // Debounce AI semantic check on the spoken text
               if (aiAnalyzeDebounceRef.current) clearTimeout(aiAnalyzeDebounceRef.current);
@@ -1018,29 +1082,65 @@ export default function App() {
     updateActivePresetId('upload');
 
     const cleanName = file.name.replace(/\.[^/.]+$/, '');
-    updateActiveCaller({
+    const initialUploadCaller: CallerInfo = {
       name: cleanName,
       phone_number: 'Uploaded Audio File',
       spam_flag: false,
       risk_score: 5,
       carrier: 'Recorded Call Screening',
       category: 'Inbound Audio File',
-    });
+    };
+    updateActiveCaller(initialUploadCaller);
     setLiveSpeechTranscript(`Transcribing speech & analyzing "${file.name}" with AI engine...`);
 
-    // 1. Post to Real Gemini Audio Analysis Endpoint (/api/analyze-audio)
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = async () => {
+    // Initial alert for Dynamic Island while screening
+    setDynamicIslandAlert({
+      type: 'telemetry_update',
+      chunk_id: 1,
+      timestamp: new Date().toISOString(),
+      transcript: `Screening uploaded audio "${file.name}"...`,
+      forensics: {
+        is_ai_voice: false,
+        pitch_variance: 0.165,
+        zcr_uniformity: 0.44,
+        spectral_centroid_hz: 2150,
+        confidence: 0.95,
+      },
+      caller_info: initialUploadCaller,
+      threat_level: 'SAFE',
+      intent: 'Acoustic waveform analysis and speech transcription in progress',
+      kill_switch: false,
+    });
+
+    let wavBase64 = '';
+    let audioBuffer: AudioBuffer | null = null;
+    let ctx: AudioContext | null = null;
+
+    // 1. Decode audio in browser and convert to standard 16kHz mono WAV for 100% Gemini accuracy
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      wavBase64 = audioBufferToWavBase64(audioBuffer, 16000);
+    } catch (decodeErr) {
+      console.warn('[Audio Decoder] Falling back to direct binary reader:', decodeErr);
+    }
+
+    // 2. Transmit to Real Gemini Forensic Audio Endpoint (/api/analyze-audio)
+    const sendAudioPayload = async (base64Payload: string, mime: string) => {
       try {
-        const dataUrl = reader.result as string;
-        const base64Audio = dataUrl.split(',')[1];
         const res = await fetch('/api/analyze-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            audio_base64: base64Audio,
-            mime_type: file.type || 'audio/wav',
+            audio_base64: base64Payload,
+            mime_type: mime,
             file_name: file.name,
           }),
         });
@@ -1058,78 +1158,80 @@ export default function App() {
             setTelemetryHistory((prev) => [...prev.slice(-9), resultPacket]);
             setTotalScans((s) => s + 1);
 
-            // Update Dynamic Island alert
+            // Pop/Update Dynamic Island with exact evidence from transcription
             setDynamicIslandAlert(resultPacket);
+
+            // Check if any rules match spoken words
+            if (resultPacket.transcript) {
+              evaluateLiveSpeechText(resultPacket.transcript);
+            }
 
             if (resultPacket.threat_level === 'CRITICAL' || resultPacket.threat_level === 'SUSPICIOUS') {
               logThreatAttempt(resultPacket);
             }
-          } else {
-            const textResponse = await res.text();
-            console.warn('[Upload Audio] Non-JSON response received:', textResponse.slice(0, 100));
-            setLiveSpeechTranscript(`Audio recording "${file.name}" uploaded. Speech transcription analyzed.`);
           }
-        } else {
-          setLiveSpeechTranscript(`Audio recording "${file.name}" uploaded. Screening complete.`);
         }
       } catch (apiErr) {
-        console.warn('Real AI audio analysis note:', apiErr);
-        setLiveSpeechTranscript(`Audio recording "${file.name}" uploaded. Screening complete.`);
+        console.warn('Real AI audio analysis error:', apiErr);
       }
     };
 
-    // 2. Play audio locally and sync 3D sphere visualizer
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioContextClass();
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    if (wavBase64) {
+      sendAudioPayload(wavBase64, 'audio/wav');
+    } else {
+      // Fallback: Read raw file via FileReader if Web Audio decode failed
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const rawBase64 = dataUrl.split(',')[1];
+        sendAudioPayload(rawBase64, file.type || 'audio/wav');
+      };
+    }
 
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      analyser.connect(ctx.destination);
-      audioFileSourceRef.current = source;
+    // 3. Play audio locally and sync 3D sphere visualizer
+    if (audioBuffer && ctx) {
+      try {
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        audioFileSourceRef.current = source;
 
-      // Animate 3D sphere to the recording audio volume
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let animId: number;
-      const checkVol = () => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const vol = sum / dataArray.length / 255;
-        if (vol > 0.035) {
-          setAudioVolume(vol);
-          setIsTranscribing(true);
-        } else {
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let animId: number;
+        const checkVol = () => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const vol = sum / dataArray.length / 255;
+          if (vol > 0.035) {
+            setAudioVolume(vol);
+            setIsTranscribing(true);
+          } else {
+            setAudioVolume(0);
+            setIsTranscribing(false);
+          }
+          animId = requestAnimationFrame(checkVol);
+        };
+        animId = requestAnimationFrame(checkVol);
+
+        source.start(0);
+
+        source.onended = () => {
+          cancelAnimationFrame(animId);
+          setIsAnalyzingAudioFile(false);
           setAudioVolume(0);
           setIsTranscribing(false);
-        }
-        animId = requestAnimationFrame(checkVol);
-      };
-      animId = requestAnimationFrame(checkVol);
-
-      source.start(0);
-
-      source.onended = () => {
-        cancelAnimationFrame(animId);
+        };
+      } catch (playErr) {
+        console.warn('Local playback error:', playErr);
         setIsAnalyzingAudioFile(false);
-        setAudioVolume(0);
-        setIsTranscribing(false);
-      };
-    } catch (err) {
-      console.warn('Audio decoding warning:', err);
+      }
+    } else {
       setIsAnalyzingAudioFile(false);
-      setAudioVolume(0);
-      setIsTranscribing(false);
     }
   };
 

@@ -159,9 +159,7 @@ export const DynamicIslandAlert: React.FC<DynamicIslandAlertProps> = ({
   if (!packet) return null;
 
   const isAiVoice = packet.forensics?.is_ai_voice ?? false;
-  const isSafe = packet.threat_level === 'SAFE';
-  const isCritical = packet.threat_level === 'CRITICAL';
-  const threatLevel = packet.threat_level || 'SAFE';
+  const rawThreatLevel = packet.threat_level || 'SAFE';
 
   const explanation = getScamExplanation(
     packet.intent,
@@ -169,8 +167,13 @@ export const DynamicIslandAlert: React.FC<DynamicIslandAlertProps> = ({
     packet.caller_info?.phone_number,
     isAiVoice,
     packet.transcript,
-    threatLevel
+    rawThreatLevel
   );
+
+  // Spoken transcript evidence is truth: if scam tactics are found, it is NEVER safe!
+  const isSafe = rawThreatLevel === 'SAFE' && !explanation.shouldCutCallImmediately;
+  const threatLevel = explanation.shouldCutCallImmediately ? 'CRITICAL' : rawThreatLevel;
+  const isCritical = threatLevel === 'CRITICAL';
 
   const shadowGlow = isSafe
     ? 'shadow-[0_24px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(48,209,88,0.28)]'
