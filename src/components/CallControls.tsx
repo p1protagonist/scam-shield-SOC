@@ -12,6 +12,8 @@ import {
   UploadCloud,
   FileAudio,
   CheckCircle,
+  Sparkles,
+  Send,
 } from 'lucide-react';
 import { CallPreset, CallerInfo } from '../types';
 
@@ -29,6 +31,7 @@ interface CallControlsProps {
   onUploadAudioFile: (file: File) => void;
   isAnalyzingAudioFile?: boolean;
   uploadedFileName?: string | null;
+  onSimulateSpeech?: (text: string) => void;
 }
 
 export const REAL_SCAM_PRESETS: CallPreset[] = [
@@ -114,11 +117,20 @@ export const CallControls: React.FC<CallControlsProps> = ({
   onUploadAudioFile,
   isAnalyzingAudioFile = false,
   uploadedFileName = null,
+  onSimulateSpeech,
 }) => {
   const [phoneInput, setPhoneInput] = useState('+18002758777');
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [playAudioOutLoud, setPlayAudioOutLoud] = useState(true);
+  const [customSpeechText, setCustomSpeechText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCustomSpeechSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customSpeechText.trim() || !onSimulateSpeech) return;
+    onSimulateSpeech(customSpeechText.trim());
+    setCustomSpeechText('');
+  };
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,10 +221,72 @@ export const CallControls: React.FC<CallControlsProps> = ({
           </div>
         </div>
 
+        {/* Live Speech Forensics Simulator (Test any spoken phrase with AI) */}
+        <div className="mb-4 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#30D158]" />
+              <span>Live Speech Forensics Simulator</span>
+            </span>
+            <span className="text-[10px] text-neutral-400">
+              Type or test any custom spoken sentence
+            </span>
+          </div>
+
+          <form onSubmit={handleCustomSpeechSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={customSpeechText}
+              onChange={(e) => setCustomSpeechText(e.target.value)}
+              placeholder="Type any spoken phrase (e.g. 'Dr. Adams appointment' or 'IRS arrest warrant')..."
+              className="flex-1 px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-white/30"
+            />
+            <button
+              type="submit"
+              disabled={!customSpeechText.trim()}
+              className="px-3 py-2 rounded-xl bg-[#30D158]/20 hover:bg-[#30D158]/30 text-[#30D158] font-semibold text-xs border border-[#30D158]/30 flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer"
+            >
+              <Send className="w-3 h-3" />
+              <span>Simulate</span>
+            </button>
+          </form>
+
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            <button
+              type="button"
+              onClick={() => onSimulateSpeech?.('Hi, this is Westside Family Medicine confirming your routine appointment with Dr. Adams tomorrow morning at 10 AM.')}
+              className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 transition-colors cursor-pointer"
+            >
+              + Safe Clinic Visit
+            </button>
+            <button
+              type="button"
+              onClick={() => onSimulateSpeech?.('This is Officer Miller from the Internal Revenue Service. A federal arrest warrant has been issued, pay with settlement vouchers immediately.')}
+              className="text-[10px] px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition-colors cursor-pointer"
+            >
+              + IRS Warrant Extortion
+            </button>
+            <button
+              type="button"
+              onClick={() => onSimulateSpeech?.('Chase fraud alert: an unauthorized international wire transfer was flagged. Read the 6-digit passcode sent to your phone right now.')}
+              className="text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-colors cursor-pointer"
+            >
+              + Bank OTP Theft
+            </button>
+            <button
+              type="button"
+              onClick={() => onSimulateSpeech?.('Grandma, please help! It is Tommy. I got into a bad car accident downtown and I am in jail, please send bail money.')}
+              className="text-[10px] px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors cursor-pointer"
+            >
+              + AI Grandchild Bail
+            </button>
+          </div>
+        </div>
+
         {/* 2. Simulation Test Scenarios (Clean Apple Tiles with Incoming Call Ringing) */}
         <div>
           <div className="text-[11px] font-medium text-neutral-400 mb-2">
-            Test Scenarios (Triggers incoming ring on Dynamic Island):
+            Incoming Test Scenarios (Dynamic Island Ringing):
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {REAL_SCAM_PRESETS.map((preset) => {

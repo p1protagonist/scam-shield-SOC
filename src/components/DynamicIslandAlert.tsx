@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   AlertOctagon,
   Info,
+  Mic,
 } from 'lucide-react';
 import { playSoftAlertChime, playAppleRingtone, stopAppleRingtone } from '../utils/audioSiren';
 import { TelemetryPacket } from '../types';
@@ -166,7 +167,9 @@ export const DynamicIslandAlert: React.FC<DynamicIslandAlertProps> = ({
     packet.intent,
     packet.caller_info?.name,
     packet.caller_info?.phone_number,
-    isAiVoice
+    isAiVoice,
+    packet.transcript,
+    threatLevel
   );
 
   const shadowGlow = isSafe
@@ -371,6 +374,24 @@ export const DynamicIslandAlert: React.FC<DynamicIslandAlertProps> = ({
                 <span>{packet.caller_info?.phone_number || ''}</span>
               </div>
             </div>
+
+            {/* Real-Time Speech Evidence Block (Derived directly from live transcription) */}
+            {packet.transcript && (
+              <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/10 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
+                  <span className="flex items-center gap-1.5 text-neutral-300 font-semibold uppercase tracking-wider">
+                    <Mic className="w-3 h-3 text-[#30D158]" />
+                    <span>Live Spoken Evidence</span>
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/[0.08] text-neutral-300 font-mono">
+                    REAL-TIME TRANSCRIPT
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-100 font-medium leading-relaxed">
+                  "{packet.transcript}"
+                </p>
+              </div>
+            )}
 
             {/* 2. Why They Are Explaining (Attacker Tactic or Legitimate Purpose) */}
             <div

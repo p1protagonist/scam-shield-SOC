@@ -108,11 +108,13 @@ export const WireframeSphere: React.FC<WireframeSphereProps> = ({
     scene.add(particles);
 
     let animId: number;
-    let clock = new THREE.Clock();
+    let lastTime = performance.now();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
+      const now = performance.now();
+      const delta = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
 
       const isTranscribingNow = isTranscribingRef.current;
       const currentVol = isTranscribingNow ? (volumeRef.current || 0) : 0;
